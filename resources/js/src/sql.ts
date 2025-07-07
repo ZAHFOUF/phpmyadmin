@@ -351,6 +351,8 @@ const insertQuery = function (queryType) {
             query = 'UPDATE `' + table + '` SET ' + editDis + ' WHERE 1';
         } else if (queryType === 'delete') {
             query = 'DELETE FROM `' + table + '` WHERE 0';
+        } else if (queryType === 'count') {
+            query = 'SELECT COUNT(*) FROM `' + table + '` WHERE 1';
         }
 
         setQuery(query);
