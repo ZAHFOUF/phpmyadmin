@@ -345,15 +345,15 @@ const insertQuery = function (queryType) {
             query = 'SELECT * FROM `' + table + '` WHERE 1';
         } else if (queryType === 'select') {
             query = 'SELECT ' + columnsList + ' FROM `' + table + '` WHERE 1';
+        } else if (queryType === 'selectCount') {
+            query = 'SELECT COUNT(*) FROM `' + table + '` WHERE 1';
         } else if (queryType === 'insert') {
             query = 'INSERT INTO `' + table + '`(' + columnsList + ') VALUES (' + valDis + ')';
         } else if (queryType === 'update') {
             query = 'UPDATE `' + table + '` SET ' + editDis + ' WHERE 1';
         } else if (queryType === 'delete') {
             query = 'DELETE FROM `' + table + '` WHERE 0';
-        } else if (queryType === 'count') {
-            query = 'SELECT COUNT(*) FROM `' + table + '` WHERE 1';
-        }
+        } 
 
         setQuery(query);
         sqlBoxLocked = false;
