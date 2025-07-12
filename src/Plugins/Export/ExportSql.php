@@ -13,8 +13,10 @@ use PhpMyAdmin\Config;
 use PhpMyAdmin\Current;
 use PhpMyAdmin\Database\Events;
 use PhpMyAdmin\Database\Routines;
+use PhpMyAdmin\Database\RoutineType;
 use PhpMyAdmin\Dbal\ConnectionType;
 use PhpMyAdmin\Dbal\DatabaseInterface;
+use PhpMyAdmin\Exceptions\ExportException;
 use PhpMyAdmin\Export\Export;
 use PhpMyAdmin\Export\StructureOrData;
 use PhpMyAdmin\Http\ServerRequest;
@@ -44,7 +46,6 @@ use PhpMyAdmin\Version;
 use function __;
 use function array_keys;
 use function bin2hex;
-use function defined;
 use function explode;
 use function implode;
 use function in_array;
@@ -62,9 +63,7 @@ use function str_contains;
 use function str_repeat;
 use function str_replace;
 use function strtoupper;
-use function trigger_error;
 
-use const E_USER_ERROR;
 use const PHP_VERSION;
 
 /**
@@ -571,6 +570,7 @@ class ExportSql extends ExportPlugin
                 $definition = Routines::getProcedureDefinition($dbi, $db, $routine);
             }
 
+            $flag = false;
             $createQuery = $this->replaceWithAliases($delimiter, $definition, $aliases, $db, $flag);
             if ($createQuery !== '' && Config::getInstance()->settings['Export']['remove_definer_from_definitions']) {
                 // Remove definer clause from routine definitions
@@ -618,8 +618,8 @@ class ExportSql extends ExportPlugin
         $delimiter = '$$';
 
         $dbi = DatabaseInterface::getInstance();
-        $procedureNames = Routines::getProcedureNames($dbi, $db);
-        $functionNames = Routines::getFunctionNames($dbi, $db);
+        $procedureNames = Routines::getNames($dbi, $db, RoutineType::Procedure);
+        $functionNames = Routines::getNames($dbi, $db, RoutineType::Function);
 
         if ($procedureNames || $functionNames) {
             $text .= "\n"
@@ -1419,11 +1419,8 @@ class ExportSql extends ExportPlugin
         if ($tmpError !== '') {
             $message = sprintf(__('Error reading structure for table %s:'), $db . '.' . $table);
             $message .= ' ' . $tmpError;
-            if (! defined('TESTSUITE')) {
-                trigger_error($message, E_USER_ERROR);
-            }
 
-            return $this->exportComment($message);
+            throw new ExportException($message);
         }
 
         // Old mode is stored so it can be restored once exporting is done.
@@ -1496,7 +1493,8 @@ class ExportSql extends ExportPlugin
             }
 
             // Substitute aliases in `CREATE` query.
-            $createQuery = $this->replaceWithAliases(null, $createQuery, $aliases, $db, $flag);
+            $flag = false;
+            $createQuery = $this->replaceWithAliases('', $createQuery, $aliases, $db, $flag);
 
             // One warning per view.
             if ($flag && $view) {
@@ -1916,6 +1914,7 @@ class ExportSql extends ExportPlugin
                             $triggerQuery .= $trigger->getDropSql() . ';' . "\n";
                         }
 
+                        $flag = false;
                         $triggerQuery .= 'DELIMITER ' . $delimiter . "\n";
                         $triggerQuery .= $this->replaceWithAliases(
                             $delimiter,
@@ -2050,13 +2049,8 @@ class ExportSql extends ExportPlugin
         if ($tmpError !== '') {
             $message = sprintf(__('Error reading data for table %s:'), $db . '.' . $table);
             $message .= ' ' . $tmpError;
-            if (! defined('TESTSUITE')) {
-                trigger_error($message, E_USER_ERROR);
-            }
 
-            return $this->export->outputHandler(
-                $this->exportComment($message),
-            );
+            throw new ExportException($message);
         }
 
         if ($result === false) {
@@ -2390,27 +2384,27 @@ class ExportSql extends ExportPlugin
     /**
      * replaces db/table/column names with their aliases
      *
-     * @param string|null $delimiter The delimiter for the parser (";" or "$$")
-     * @param string      $sqlQuery  SQL query in which aliases are to be substituted
-     * @param mixed[]     $aliases   Alias information for db/table/column
-     * @param string      $db        the database name
-     * @param bool|null   $flag      the flag denoting whether any replacement was done
+     * @param string  $delimiter The delimiter for the parser (";" or "$$")
+     * @param string  $sqlQuery  SQL query in which aliases are to be substituted
+     * @param mixed[] $aliases   Alias information for db/table/column
+     * @param string  $db        the database name
+     * @param bool    $flag      the flag denoting whether any replacement was done
      *
      * @return string query replaced with aliases
      */
     public function replaceWithAliases(
-        string|null $delimiter,
+        string $delimiter,
         string $sqlQuery,
         array $aliases,
         string $db,
-        bool|null &$flag = null,
+        bool &$flag,
     ): string {
         $flag = false;
 
         /**
          * The parser of this query.
          */
-        $parser = new Parser(empty($delimiter) ? $sqlQuery : 'DELIMITER ' . $delimiter . "\n" . $sqlQuery);
+        $parser = new Parser($delimiter === '' ? $sqlQuery : 'DELIMITER ' . $delimiter . "\n" . $sqlQuery);
 
         if (empty($parser->statements[0])) {
             return $sqlQuery;

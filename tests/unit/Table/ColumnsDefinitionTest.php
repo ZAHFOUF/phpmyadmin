@@ -39,7 +39,8 @@ class ColumnsDefinitionTest extends AbstractTestCase
                 . ' `COLUMN_COMMENT` AS `Comment`'
                 . ' FROM `information_schema`.`COLUMNS`'
                 . ' WHERE `TABLE_SCHEMA` COLLATE utf8_bin = \'sakila\' AND'
-                . ' `TABLE_NAME` COLLATE utf8_bin = \'actor\'',
+                . ' `TABLE_NAME` COLLATE utf8_bin = \'actor\''
+                . ' ORDER BY `ORDINAL_POSITION`',
             [
                 ['actor_id', 'smallint(5) unsigned', null, 'NO', 'PRI', null, 'auto_increment', 'select,insert,update,references', ''],
                 ['first_name', 'varchar(45)', 'utf8mb4_general_ci', 'NO', '', null, '', 'select,insert,update,references', ''],
@@ -79,7 +80,7 @@ SQL;
         );
 
         $relation = new Relation($dbi);
-        $columnsDefinition = new ColumnsDefinition($dbi, $relation, new Transformations());
+        $columnsDefinition = new ColumnsDefinition($dbi, $relation, new Transformations($dbi, $relation));
 
         Current::$database = 'sakila';
         Current::$table = 'actor';
@@ -224,12 +225,11 @@ SQL;
      */
     #[DataProvider('providerColumnMetaDefault')]
     public function testDecorateColumnMetaDefault(
-        string $type,
         string|null $default,
         bool $isNull,
         array $expected,
     ): void {
-        $result = ColumnsDefinition::decorateColumnMetaDefault($type, $default, $isNull);
+        $result = ColumnsDefinition::decorateColumnMetaDefault($default, $isNull);
 
         self::assertEquals($expected, $result);
     }
@@ -237,55 +237,47 @@ SQL;
     /**
      * Data provider for testDecorateColumnMetaDefault
      *
-     * @psalm-return array<string, array{string, string|null, bool, array<string, string>}>
+     * @psalm-return array<string, array{string|null, bool, array<string, string>}>
      */
     public static function providerColumnMetaDefault(): array
     {
         return [
             'when Default is null and Null is YES' => [
-                '',
                 null,
                 true,
                 ['DefaultType' => 'NULL', 'DefaultValue' => ''],
             ],
             'when Default is null and Null is NO' => [
-                '',
                 null,
                 false,
                 ['DefaultType' => 'NONE', 'DefaultValue' => ''],
             ],
             'when Default is CURRENT_TIMESTAMP' => [
-                '',
                 'CURRENT_TIMESTAMP',
                 false,
                 ['DefaultType' => 'CURRENT_TIMESTAMP', 'DefaultValue' => ''],
             ],
             'when Default is current_timestamp' => [
-                '',
                 'current_timestamp()',
                 false,
                 ['DefaultType' => 'CURRENT_TIMESTAMP', 'DefaultValue' => ''],
             ],
             'when Default is UUID' => [
-                '',
                 'UUID',
                 false,
                 ['DefaultType' => 'UUID', 'DefaultValue' => ''],
             ],
             'when Default is uuid()' => [
-                '',
                 'uuid()',
                 false,
                 ['DefaultType' => 'UUID', 'DefaultValue' => ''],
             ],
             'when Default is anything else and Type is text' => [
-                'text',
-                '"some\/thing"',
+                '"some/thing"',
                 false,
-                ['Default' => 'some/thing', 'DefaultType' => 'USER_DEFINED', 'DefaultValue' => '"some\/thing"'],
+                ['DefaultType' => 'USER_DEFINED', 'DefaultValue' => '"some/thing"'],
             ],
             'when Default is anything else and Type is not text' => [
-                'something',
                 '"some\/thing"',
                 false,
                 ['DefaultType' => 'USER_DEFINED', 'DefaultValue' => '"some\/thing"'],

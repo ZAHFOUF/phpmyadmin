@@ -59,6 +59,7 @@ use const VERSION_CHECK_DEFAULT;
  *     ProxyPass: string,
  *     MaxDbList: int<1, max>,
  *     MaxTableList: int<1, max>,
+ *     MaxRoutineList: int<1, max>,
  *     ShowHint: bool,
  *     MaxCharactersInDisplayedSQL: int<1, max>,
  *     PersistentConnections: bool,
@@ -478,6 +479,19 @@ final class Settings
      * @psalm-var positive-int
      */
     public int $MaxTableList;
+
+    /**
+     * maximum number of routines displayed in routine list
+     *
+     * ```php
+     * $cfg['MaxRoutineList'] = 250;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_MaxRoutineList
+     *
+     * @psalm-var positive-int
+     */
+    public int $MaxRoutineList;
 
     /**
      * whether to show hint or not
@@ -1832,10 +1846,10 @@ final class Settings
     /**
      * You can select here which functions will be used for character set conversion.
      * Possible values are:
-     *      auto   - automatically use available one (first is tested iconv, then mbstring)
-     *      iconv  - use iconv or libiconv functions
-     *      mb     - use mbstring extension
-     *      none   - disable encoding conversion
+     *      auto     - automatically use available one (first is tested iconv, then mbstring)
+     *      iconv    - use iconv or libiconv functions
+     *      mbstring - use mbstring extension
+     *      none     - disable encoding conversion
      *
      * ```php
      * $cfg['RecodingEngine'] = 'auto';
@@ -1843,7 +1857,7 @@ final class Settings
      *
      * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_RecodingEngine
      *
-     * @psalm-var 'auto'|'iconv'|'mb'|'none'
+     * @psalm-var 'auto'|'iconv'|'mbstring'|'none'
      */
     public string $RecodingEngine;
 
@@ -2630,6 +2644,7 @@ final class Settings
         $this->ProxyPass = $this->setProxyPass($settings);
         $this->MaxDbList = $this->setMaxDbList($settings);
         $this->MaxTableList = $this->setMaxTableList($settings);
+        $this->MaxRoutineList = $this->setMaxRoutineList($settings);
         $this->ShowHint = $this->setShowHint($settings);
         $this->MaxCharactersInDisplayedSQL = $this->setMaxCharactersInDisplayedSQL($settings);
         $this->PersistentConnections = $this->setPersistentConnections($settings);
@@ -2827,6 +2842,7 @@ final class Settings
             'ProxyPass' => $this->ProxyPass,
             'MaxDbList' => $this->MaxDbList,
             'MaxTableList' => $this->MaxTableList,
+            'MaxRoutineList' => $this->MaxRoutineList,
             'ShowHint' => $this->ShowHint,
             'MaxCharactersInDisplayedSQL' => $this->MaxCharactersInDisplayedSQL,
             'PersistentConnections' => $this->PersistentConnections,
@@ -3248,6 +3264,22 @@ final class Settings
         $maxTableList = (int) $settings['MaxTableList'];
 
         return $maxTableList >= 1 ? $maxTableList : 250;
+    }
+
+    /**
+     * @param array<int|string, mixed> $settings
+     *
+     * @psalm-return positive-int
+     */
+    private function setMaxRoutineList(array $settings): int
+    {
+        if (! isset($settings['MaxRoutineList'])) {
+            return 250;
+        }
+
+        $maxRoutineList = (int) $settings['MaxRoutineList'];
+
+        return $maxRoutineList >= 1 ? $maxRoutineList : 250;
     }
 
     /** @param array<int|string, mixed> $settings */
@@ -4656,7 +4688,7 @@ final class Settings
     /**
      * @param array<int|string, mixed> $settings
      *
-     * @psalm-return 'auto'|'iconv'|'mb'|'none'
+     * @psalm-return 'auto'|'iconv'|'mbstring'|'none'
      */
     private function setRecodingEngine(array $settings): string
     {
@@ -4665,6 +4697,10 @@ final class Settings
             || ! in_array($settings['RecodingEngine'], ['iconv', 'mb', 'none'], true)
         ) {
             return 'auto';
+        }
+
+        if ($settings['RecodingEngine'] === 'mb') {
+            return 'mbstring';
         }
 
         return $settings['RecodingEngine'];

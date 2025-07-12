@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests\Controllers\Table;
 
 use Fig\Http\Message\StatusCodeInterface;
+use PhpMyAdmin\Config;
 use PhpMyAdmin\Controllers\Table\GisVisualizationController;
 use PhpMyAdmin\Core;
 use PhpMyAdmin\Current;
@@ -44,7 +45,7 @@ class GisVisualizationControllerTest extends AbstractTestCase
         $dummyDbi = $this->createDbiDummy();
         $dummyDbi->addSelectDb('test_db');
         $dummyDbi->addResult(
-            'SELECT * FROM `gis_all`',
+            'SELECT * FROM `gis_all` LIMIT 0, 0',
             [['POINT', 'POINT(100 250)']],
             ['name', 'shape'],
             [
@@ -120,10 +121,13 @@ class GisVisualizationControllerTest extends AbstractTestCase
             $dbi,
             new DbTableExists($dbi),
             ResponseFactory::create(),
+            new Config(),
         );
         $response = $controller($request);
 
         self::assertSame(StatusCodeInterface::STATUS_OK, $response->getStatusCode());
         self::assertSame($expected, $responseRenderer->getHTMLResult());
+        $dummyDbi->assertAllSelectsConsumed();
+        $dummyDbi->assertAllQueriesConsumed();
     }
 }

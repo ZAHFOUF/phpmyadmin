@@ -15,21 +15,18 @@ use PhpMyAdmin\Dbal\DatabaseInterface;
 use PhpMyAdmin\Html\Generator;
 use PhpMyAdmin\Http\Response;
 use PhpMyAdmin\Http\ServerRequest;
-use PhpMyAdmin\Index;
+use PhpMyAdmin\Indexes\Index;
 use PhpMyAdmin\MessageType;
 use PhpMyAdmin\ResponseRenderer;
 use PhpMyAdmin\Table\Table;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\UrlParams;
-use PhpMyAdmin\Util;
 use PhpMyAdmin\Utils\ForeignKey;
 
 use function __;
 use function array_keys;
-use function mb_strtoupper;
 use function md5;
 use function strnatcasecmp;
-use function strtoupper;
 use function uksort;
 use function usort;
 
@@ -38,13 +35,14 @@ use function usort;
  *
  * Includes phpMyAdmin relations and InnoDB relations.
  */
-final class RelationController implements InvocableController
+final readonly class RelationController implements InvocableController
 {
     public function __construct(
-        private readonly ResponseRenderer $response,
-        private readonly Template $template,
-        private readonly Relation $relation,
-        private readonly DatabaseInterface $dbi,
+        private ResponseRenderer $response,
+        private Template $template,
+        private Relation $relation,
+        private DatabaseInterface $dbi,
+        private Config $config,
     ) {
     }
 
@@ -82,7 +80,11 @@ final class RelationController implements InvocableController
             if (isset($_POST['foreignTable'])) {
                 $this->getDropdownValueForTable();
             } else { // if only the db is selected
-                $this->getDropdownValueForDatabase($storageEngine);
+                $this->getDropdownValueForDatabase(
+                    $storageEngine,
+                    $request->getParsedBodyParamAsString('foreignDb'),
+                    $request->getParsedBodyParamAsString('foreign', ''),
+                );
             }
 
             return $this->response->response();
@@ -161,22 +163,19 @@ final class RelationController implements InvocableController
          * Dialog
          */
         // Now find out the columns of our $table
-        // need to use DatabaseInterface::QUERY_BUFFERED with $this->dbi->numRows()
-        // in mysqli
         $columns = $this->dbi->getColumns(Current::$database, Current::$table);
 
         $columnArray = [];
         $columnArray[''] = '';
         foreach ($columns as $column) {
-            if (strtoupper($storageEngine) !== 'INNODB' && $column->key === '') {
+            if ($storageEngine !== 'InnoDB' && $column->key === '') {
                 continue;
             }
 
             $columnArray[$column->field] = $column->field;
         }
 
-        $config = Config::getInstance();
-        if ($config->settings['NaturalOrder']) {
+        if ($this->config->settings['NaturalOrder']) {
             uksort($columnArray, strnatcasecmp(...));
         }
 
@@ -185,16 +184,16 @@ final class RelationController implements InvocableController
 
         foreach ($relationsForeign as $oneKey) {
             $foreignDb = $oneKey->refDbName ?? Current::$database;
-            $foreignTable = false;
+            $foreignTable = '';
             if ($foreignDb !== '') {
-                $foreignTable = $oneKey->refTableName ?? false;
+                $foreignTable = $oneKey->refTableName ?? '';
                 $tables = $this->relation->getTables($foreignDb, $storageEngine);
             } else {
                 $tables = $this->relation->getTables(Current::$database, $storageEngine);
             }
 
             $uniqueColumns = [];
-            if ($foreignDb !== '' && $foreignTable !== false && $foreignTable !== '') {
+            if ($foreignDb !== '' && $foreignTable !== '') {
                 $tableObject = new Table($foreignTable, $foreignDb, $this->dbi);
                 $uniqueColumns = $tableObject->getUniqueColumns(false, false);
             }
@@ -204,7 +203,6 @@ final class RelationController implements InvocableController
                 'one_key' => $oneKey,
                 'column_array' => $columnArray,
                 'options_array' => $options,
-                'tbl_storage_engine' => $storageEngine,
                 'db' => Current::$database,
                 'table' => Current::$table,
                 'url_params' => UrlParams::$params,
@@ -223,13 +221,12 @@ final class RelationController implements InvocableController
             'one_key' => [],
             'column_array' => $columnArray,
             'options_array' => $options,
-            'tbl_storage_engine' => $storageEngine,
             'db' => Current::$database,
             'table' => Current::$table,
             'url_params' => UrlParams::$params,
             'databases' => $this->dbi->getDatabaseList(),
-            'foreign_db' => false,
-            'foreign_table' => false,
+            'foreign_db' => '',
+            'foreign_table' => '',
             'unique_columns' => [],
             'tables' => $tables,
         ]);
@@ -240,7 +237,7 @@ final class RelationController implements InvocableController
             // (see bug https://github.com/phpmyadmin/phpmyadmin/issues/8827)
             $fieldHash = md5($column->field);
 
-            $foreignTable = false;
+            $foreignTable = '';
             $foreignColumn = false;
 
             // Database dropdown
@@ -264,7 +261,7 @@ final class RelationController implements InvocableController
 
             // Column dropdown
             $uniqueColumns = [];
-            if ($foreignDb !== '' && $foreignTable !== false && $foreignTable !== '') {
+            if ($foreignDb !== '' && $foreignTable !== '') {
                 if (isset($relations[$column->field])) {
                     /** @var string $foreignColumn */
                     $foreignColumn = $relations[$column->field]['foreign_field'];
@@ -296,7 +293,7 @@ final class RelationController implements InvocableController
             'internal_relation_columns' => $internalRelationColumns,
             'url_params' => UrlParams::$params,
             'databases' => $this->dbi->getDatabaseList(),
-            'default_sliders_state' => $config->settings['InitialSlidersState'],
+            'default_sliders_state' => $this->config->settings['InitialSlidersState'],
             'route' => $request->getRoute(),
             'display_field' => $this->relation->getDisplayField(Current::$database, Current::$table),
             'foreign_key_row' => $foreignKeyRow,
@@ -370,7 +367,7 @@ final class RelationController implements InvocableController
             $columnList = $tableObj->getIndexedColumns(false, false);
         }
 
-        if (Config::getInstance()->settings['NaturalOrder']) {
+        if ($this->config->settings['NaturalOrder']) {
             usort($columnList, strnatcasecmp(...));
         }
 
@@ -389,32 +386,14 @@ final class RelationController implements InvocableController
      *
      * @param string $storageEngine Storage engine.
      */
-    public function getDropdownValueForDatabase(string $storageEngine): void
+    public function getDropdownValueForDatabase(string $storageEngine, string $foreignDb, string $foreign): void
     {
-        $tables = [];
-        $foreign = isset($_POST['foreign']) && $_POST['foreign'] === 'true';
+        $foreign = $foreign === 'true';
 
         if ($foreign) {
-            $query = 'SHOW TABLE STATUS FROM '
-                . Util::backquote($_POST['foreignDb']);
-            $tablesRs = $this->dbi->query($query);
-
-            foreach ($tablesRs as $row) {
-                if (! isset($row['Engine']) || mb_strtoupper($row['Engine']) !== $storageEngine) {
-                    continue;
-                }
-
-                $tables[] = $row['Name'];
-            }
+            $tables = $this->relation->getTables($foreignDb, $storageEngine);
         } else {
-            $query = 'SHOW TABLES FROM '
-                . Util::backquote($_POST['foreignDb']);
-            $tablesRs = $this->dbi->query($query);
-            $tables = $tablesRs->fetchAllColumn();
-        }
-
-        if (Config::getInstance()->settings['NaturalOrder']) {
-            usort($tables, strnatcasecmp(...));
+            $tables = $this->dbi->getTables($foreignDb);
         }
 
         $this->response->addJSON('tables', $tables);

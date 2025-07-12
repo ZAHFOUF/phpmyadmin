@@ -7,6 +7,7 @@ namespace PhpMyAdmin;
 use PhpMyAdmin\ConfigStorage\Relation;
 use PhpMyAdmin\Dbal\DatabaseInterface;
 use PhpMyAdmin\Html\Generator;
+use PhpMyAdmin\Indexes\Index;
 use PhpMyAdmin\Query\Compatibility;
 
 use function __;
@@ -988,8 +989,8 @@ class Normalization
             . 'COUNT(DISTINCT ' . $partialKey . ',' . $column . ') as pkColCnt '
             . 'FROM (SELECT * FROM ' . Util::backquote($table)
             . ' LIMIT 500) as dt;';
-        $pkColCnt = $this->dbi->fetchValue($query);
-        if ($pkCnt !== 0 && $pkCnt === $colCnt && $colCnt == $pkColCnt) {
+        $pkColCnt = (int) $this->dbi->fetchValue($query);
+        if ($pkCnt !== 0 && $pkCnt === $colCnt && $colCnt === $pkColCnt) {
             return true;
         }
 

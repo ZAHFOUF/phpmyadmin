@@ -50,6 +50,7 @@ final class FindReplaceController implements InvocableController
         private readonly Template $template,
         private readonly DatabaseInterface $dbi,
         private readonly DbTableExists $dbTableExists,
+        private readonly Config $config,
     ) {
     }
 
@@ -142,7 +143,7 @@ final class FindReplaceController implements InvocableController
 
             $type = $row->type;
             // reformat mysql query output
-            if (strncasecmp($type, 'set', 3) == 0 || strncasecmp($type, 'enum', 4) == 0) {
+            if (strncasecmp($type, 'set', 3) === 0 || strncasecmp($type, 'enum', 4) === 0) {
                 $type = str_replace(',', ', ', $type);
             } else {
                 // strip the "BINARY" attribute, except if we find "BINARY(" because
@@ -170,7 +171,7 @@ final class FindReplaceController implements InvocableController
     private function displaySelectionFormAction(): void
     {
         if (UrlParams::$goto === '') {
-            UrlParams::$goto = Url::getFromRoute(Config::getInstance()->settings['DefaultTabTable']);
+            UrlParams::$goto = Url::getFromRoute($this->config->settings['DefaultTabTable']);
         }
 
         $types = [];

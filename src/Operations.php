@@ -7,6 +7,7 @@ namespace PhpMyAdmin;
 use PhpMyAdmin\ConfigStorage\Relation;
 use PhpMyAdmin\Database\Events;
 use PhpMyAdmin\Database\Routines;
+use PhpMyAdmin\Database\RoutineType;
 use PhpMyAdmin\Dbal\DatabaseInterface;
 use PhpMyAdmin\Engines\Innodb;
 use PhpMyAdmin\Identifiers\DatabaseName;
@@ -55,7 +56,7 @@ class Operations
      */
     public function runProcedureAndFunctionDefinitions(string $db, DatabaseName $newDatabaseName): void
     {
-        foreach (Routines::getProcedureNames($this->dbi, $db) as $procedureName) {
+        foreach (Routines::getNames($this->dbi, $db, RoutineType::Procedure) as $procedureName) {
             $this->dbi->selectDb($db);
             $query = Routines::getProcedureDefinition($this->dbi, $db, $procedureName);
             if ($query === null) {
@@ -68,7 +69,7 @@ class Operations
             $this->dbi->query($query);
         }
 
-        foreach (Routines::getFunctionNames($this->dbi, $db) as $functionName) {
+        foreach (Routines::getNames($this->dbi, $db, RoutineType::Function) as $functionName) {
             $this->dbi->selectDb($db);
             $query = Routines::getFunctionDefinition($this->dbi, $db, $functionName);
             if ($query === null) {
@@ -166,7 +167,7 @@ class Operations
      * @param bool     $move   whether database name is empty or not
      * @param string   $db     database name
      *
-     * @return mixed[] SQL queries for the constraints
+     * @return string[] SQL queries for the constraints
      */
     public function copyTables(array $tables, bool $move, string $db, DatabaseName $newDatabaseName): array
     {
@@ -438,7 +439,7 @@ class Operations
     /**
      * Create all accumulated constraints
      *
-     * @param mixed[] $sqlConstraints array of sql constraints for the database
+     * @param string[] $sqlConstraints array of sql constraints for the database
      */
     public function createAllAccumulatedConstraints(array $sqlConstraints, DatabaseName $newDatabaseName): void
     {
@@ -501,7 +502,7 @@ class Operations
          * This patch is to support newer MySQL/MariaDB while also for backward compatibilities.
          */
         if (
-            (strtolower($innodbFileFormat) === 'barracuda') || ($innodbFileFormat == '')
+            strtolower($innodbFileFormat) === 'barracuda' || $innodbFileFormat === ''
             && $innodbEnginePlugin->supportsFilePerTable()
         ) {
             $possibleRowFormats['INNODB']['DYNAMIC'] = 'DYNAMIC';
@@ -567,7 +568,7 @@ class Operations
                 . '.'
                 . Util::backquote($arr['foreign_table']);
 
-            if ($arr['foreign_table'] == Current::$table) {
+            if ($arr['foreign_table'] === Current::$table) {
                 $foreignTable = Current::$table . '1';
                 $joinQuery .= ' AS ' . Util::backquote($foreignTable);
             } else {
@@ -656,7 +657,7 @@ class Operations
         if (
             $pmaTable->isEngine(['MYISAM', 'ARIA', 'ISAM'])
             && isset($_POST['new_pack_keys'])
-            && $_POST['new_pack_keys'] != $packKeys
+            && $_POST['new_pack_keys'] !== $packKeys
         ) {
             $tableAlters[] = 'pack_keys = ' . $_POST['new_pack_keys'];
         }
@@ -710,7 +711,7 @@ class Operations
      *
      * @return string[]
      */
-    public function getWarningMessagesArray(mixed $newTableStorageEngine): array
+    public function getWarningMessagesArray(string $newTableStorageEngine): array
     {
         $warningMessages = [];
         foreach ($this->dbi->getWarnings() as $warning) {
@@ -721,7 +722,7 @@ class Operations
             // I just ignore it. But there are other 1478 messages
             // that it's better to show.
             if (
-                $newTableStorageEngine === 'MyISAM'
+                $newTableStorageEngine === 'MYISAM'
                 && $warning->code === 1478
                 && $warning->level === 'Error'
             ) {
@@ -883,7 +884,7 @@ class Operations
          * A target table name has been sent to this script -> do the work
          */
         if (isset($_POST['new_name']) && is_scalar($_POST['new_name']) && (string) $_POST['new_name'] !== '') {
-            if ($db === $targetDb && $table == $_POST['new_name']) {
+            if ($db === $targetDb && $table === $_POST['new_name']) {
                 if (isset($_POST['submit_move'])) {
                     $message = Message::error(__('Can\'t move table to same one!'));
                 } else {

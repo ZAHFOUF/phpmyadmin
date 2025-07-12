@@ -42,7 +42,7 @@
                   <br>
                   <input type="checkbox"
                          title="{{ t('Use this column in criteria') }}"
-                         class="criteria_col">
+                         class="criteria_col" data-bs-toggle="collapse" data-bs-target="#criteriaOptions{{ id }}" aria-expanded="false" aria-controls="criteriaOptions{{ id }}">
 
                   <button class="btn btn-link p-0 jsCriteriaButton" type="button" data-bs-toggle="collapse" data-bs-target="#criteriaOptions{{ id }}" aria-expanded="false" aria-controls="criteriaOptions{{ id }}">
                     {{ t('criteria') }}
@@ -119,7 +119,7 @@
                           </td>
                         </tr>
 
-                        <tr>
+                        <tr class="rhs_table" style="display: none;">
                           <td></td>
                           <td>
                             <select class="tableNameSelect">
@@ -172,6 +172,7 @@
 
       <div class="card-footer">
         <input class="btn btn-secondary" type="button" id="update_query_button" value="{{ t('Update query') }}">
+        <input class="btn btn-secondary" type="button" id="copy_query" value="{{ t('Copy query') }}" disabled>
         <input class="btn btn-primary" type="button" id="submit_query" value="{{ t('Submit query') }}">
       </div>
     </div>

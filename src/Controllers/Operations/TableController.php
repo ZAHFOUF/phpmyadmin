@@ -16,7 +16,7 @@ use PhpMyAdmin\Http\Response;
 use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\Identifiers\DatabaseName;
 use PhpMyAdmin\Identifiers\TableName;
-use PhpMyAdmin\Index;
+use PhpMyAdmin\Indexes\Index;
 use PhpMyAdmin\Message;
 use PhpMyAdmin\MessageType;
 use PhpMyAdmin\Operations;
@@ -41,15 +41,16 @@ use function preg_replace;
 use function str_contains;
 use function urldecode;
 
-final class TableController implements InvocableController
+final readonly class TableController implements InvocableController
 {
     public function __construct(
-        private readonly ResponseRenderer $response,
-        private readonly Operations $operations,
-        private readonly UserPrivilegesFactory $userPrivilegesFactory,
-        private readonly Relation $relation,
-        private readonly DatabaseInterface $dbi,
-        private readonly DbTableExists $dbTableExists,
+        private ResponseRenderer $response,
+        private Operations $operations,
+        private UserPrivilegesFactory $userPrivilegesFactory,
+        private Relation $relation,
+        private DatabaseInterface $dbi,
+        private DbTableExists $dbTableExists,
+        private Config $config,
     ) {
     }
 
@@ -75,7 +76,6 @@ final class TableController implements InvocableController
 
         $isSystemSchema = Utilities::isSystemSchema(Current::$database);
         UrlParams::$params = ['db' => Current::$database, 'table' => Current::$table];
-        $config = Config::getInstance();
 
         $databaseName = DatabaseName::tryFrom($request->getParam('db'));
         if ($databaseName === null || ! $this->dbTableExists->selectDatabase($databaseName)) {
@@ -121,7 +121,7 @@ final class TableController implements InvocableController
             $showComment = '';
         } else {
             $tableIsAView = false;
-            $tableStorageEngine = $pmaTable->getStorageEngine();
+            $tableStorageEngine = mb_strtoupper($pmaTable->getStorageEngine());
             $showComment = $pmaTable->getComment();
         }
 
@@ -158,8 +158,7 @@ final class TableController implements InvocableController
             $this->response->addJSON('message', $message);
 
             if ($message->isSuccess()) {
-                /** @var mixed $targetDbParam */
-                $targetDbParam = $request->getParsedBodyParam('target_db');
+                $targetDbParam = $request->getParsedBodyParamAsStringOrNull('target_db');
                 if ($request->hasBodyParam('submit_move') && is_string($targetDbParam)) {
                     Current::$database = $targetDbParam; // Used in Header::getJsParams()
                 }
@@ -180,8 +179,7 @@ final class TableController implements InvocableController
          * Updates table comment, type and options if required
          */
         if ($request->hasBodyParam('submitoptions')) {
-            /** @var mixed $newName */
-            $newName = $request->getParsedBodyParam('new_name');
+            $newName = $request->getParsedBodyParamAsStringOrNull('new_name');
             if (is_string($newName)) {
                 if ($this->dbi->getLowerCaseNames() === 1) {
                     $newName = mb_strtolower($newName);
@@ -193,13 +191,12 @@ final class TableController implements InvocableController
 
                 if ($pmaTable->rename($newName)) {
                     if ($request->getParsedBodyParam('adjust_privileges')) {
-                        /** @var mixed $dbParam */
-                        $dbParam = $request->getParsedBodyParam('db');
+                        $dbParam = $request->getParsedBodyParamAsString('db', '');
                         $this->operations->adjustPrivilegesRenameOrMoveTable(
                             $userPrivileges,
                             $oldDb,
                             $oldTable,
-                            is_string($dbParam) ? $dbParam : '',
+                            $dbParam,
                             $newName,
                         );
                     }
@@ -218,18 +215,12 @@ final class TableController implements InvocableController
                 }
             }
 
-            /** @var mixed $newTableStorageEngine */
-            $newTableStorageEngine = $request->getParsedBodyParam('new_tbl_storage_engine');
-            $newTblStorageEngine = '';
-            if (
-                is_string($newTableStorageEngine) && $newTableStorageEngine !== ''
-                && mb_strtoupper($newTableStorageEngine) !== $tableStorageEngine
-            ) {
-                $newTblStorageEngine = mb_strtoupper($newTableStorageEngine);
-
+            $newTableStorageEngine = mb_strtoupper($request->getParsedBodyParamAsString('new_tbl_storage_engine', ''));
+            $newStorageEngine = '';
+            if ($newTableStorageEngine !== '' && $newTableStorageEngine !== $tableStorageEngine) {
+                $newStorageEngine = $newTableStorageEngine;
                 if ($pmaTable->isEngine('ARIA')) {
-                    $createOptions['transactional'] = ($createOptions['transactional'] ?? '')
-                        == '0' ? '0' : '1';
+                    $createOptions['transactional'] = ($createOptions['transactional'] ?? '') == '0' ? '0' : '1';
                     $createOptions['page_checksum'] ??= '';
                 }
             }
@@ -241,7 +232,7 @@ final class TableController implements InvocableController
                 $createOptions['page_checksum'] ?? '',
                 empty($createOptions['delay_key_write']) ? '0' : '1',
                 $createOptions['row_format'] ?? $pmaTable->getRowFormat(),
-                $newTblStorageEngine,
+                $newStorageEngine,
                 isset($createOptions['transactional']) && $createOptions['transactional'] == '0' ? '0' : '1',
                 $tableCollation,
                 $tableStorageEngine,
@@ -258,8 +249,7 @@ final class TableController implements InvocableController
                 $warningMessages = $this->operations->getWarningMessagesArray($newTableStorageEngine);
             }
 
-            /** @var mixed $tableCollationParam */
-            $tableCollationParam = $request->getParsedBodyParam('tbl_collation');
+            $tableCollationParam = $request->getParsedBodyParamAsStringOrNull('tbl_collation');
             if (
                 is_string($tableCollationParam) && $tableCollationParam !== ''
                 && $request->getParsedBodyParam('change_all_collations')
@@ -267,39 +257,34 @@ final class TableController implements InvocableController
                 $this->operations->changeAllColumnsCollation(Current::$database, Current::$table, $tableCollationParam);
             }
 
-            if ($tableCollationParam !== null && (! is_string($tableCollationParam) || $tableCollationParam === '')) {
-                if ($request->isAjax()) {
-                    $this->response->setRequestStatus(false);
-                    $this->response->addJSON(
-                        'message',
-                        Message::error(__('No collation provided.')),
-                    );
+            if ($tableCollationParam === '' && $request->isAjax()) {
+                $this->response->setRequestStatus(false);
+                $this->response->addJSON(
+                    'message',
+                    Message::error(__('No collation provided.')),
+                );
 
-                    return $this->response->response();
-                }
+                return $this->response->response();
             }
         }
 
-        /** @var mixed $orderField */
-        $orderField = $request->getParsedBodyParam('order_field');
+        $orderField = $request->getParsedBodyParamAsStringOrNull('order_field');
 
         /**
          * Reordering the table has been requested by the user
          */
         if ($request->hasBodyParam('submitorderby') && is_string($orderField) && $orderField !== '') {
-            /** @var mixed $orderOrder */
-            $orderOrder = $request->getParsedBodyParam('order_order');
+            $orderOrder = $request->getParsedBodyParamAsString('order_order', '');
             Current::$sqlQuery = QueryGenerator::getQueryForReorderingTable(
                 Current::$table,
                 urldecode($orderField),
-                is_string($orderOrder) ? $orderOrder : '',
+                $orderOrder,
             );
             $this->dbi->query(Current::$sqlQuery);
             $result = true;
         }
 
-        /** @var mixed $partitionOperation */
-        $partitionOperation = $request->getParsedBodyParam('partition_operation');
+        $partitionOperation = $request->getParsedBodyParamAsStringOrNull('partition_operation');
 
         /**
          * A partition operation has been requested by the user
@@ -330,7 +315,7 @@ final class TableController implements InvocableController
                 $showComment = '';
             } else {
                 $tableIsAView = false;
-                $tableStorageEngine = $pmaTable->getStorageEngine();
+                $tableStorageEngine = mb_strtoupper($pmaTable->getStorageEngine());
                 $showComment = $pmaTable->getComment();
             }
 
@@ -339,7 +324,7 @@ final class TableController implements InvocableController
             $createOptions = $pmaTable->getCreateOptions();
         }
 
-        if (isset($result) && empty(Current::$messageToShow)) {
+        if (isset($result) && Current::$messageToShow === '') {
             if ($newMessage === '') {
                 if (Current::$sqlQuery === '') {
                     $newMessage = Message::success(__('No change'));
@@ -446,8 +431,8 @@ final class TableController implements InvocableController
 
         $storageEngines = StorageEngine::getArray();
 
-        $charsets = Charsets::getCharsets($this->dbi, $config->selectedServer['DisableIS']);
-        $collations = Charsets::getCollations($this->dbi, $config->selectedServer['DisableIS']);
+        $charsets = Charsets::getCharsets($this->dbi, $this->config->selectedServer['DisableIS']);
+        $collations = Charsets::getCollations($this->dbi, $this->config->selectedServer['DisableIS']);
 
         $hasPackKeys = isset($createOptions['pack_keys'])
             && $pmaTable->isEngine(['MYISAM', 'ARIA', 'ISAM']);
@@ -460,7 +445,7 @@ final class TableController implements InvocableController
 
         $databaseList = [];
         $listDatabase = $this->dbi->getDatabaseList();
-        if (count($listDatabase) <= $config->settings['MaxDbList']) {
+        if (count($listDatabase) <= $this->config->settings['MaxDbList']) {
             $databaseList = $listDatabase->getList();
         }
 

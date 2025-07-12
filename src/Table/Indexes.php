@@ -7,7 +7,7 @@ namespace PhpMyAdmin\Table;
 use PhpMyAdmin\Dbal\DatabaseInterface;
 use PhpMyAdmin\Identifiers\DatabaseName;
 use PhpMyAdmin\Identifiers\TableName;
-use PhpMyAdmin\Index;
+use PhpMyAdmin\Indexes\Index;
 use PhpMyAdmin\Message;
 use PhpMyAdmin\Query\Compatibility;
 use PhpMyAdmin\Query\Generator as QueryGenerator;
@@ -64,7 +64,7 @@ final class Indexes
         // Builds the new one
         switch ($index->getChoice()) {
             case 'PRIMARY':
-                if ($index->getName() == '') {
+                if ($index->getName() === '') {
                     $index->setName('PRIMARY');
                 } elseif ($index->getName() !== 'PRIMARY') {
                     $this->error = Message::error(

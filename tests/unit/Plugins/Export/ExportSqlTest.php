@@ -11,6 +11,7 @@ use PhpMyAdmin\ConfigStorage\RelationParameters;
 use PhpMyAdmin\Current;
 use PhpMyAdmin\Dbal\ConnectionType;
 use PhpMyAdmin\Dbal\DatabaseInterface;
+use PhpMyAdmin\Exceptions\ExportException;
 use PhpMyAdmin\Export\Export;
 use PhpMyAdmin\Http\Factory\ServerRequestFactory;
 use PhpMyAdmin\Plugins\Export\ExportSql;
@@ -73,11 +74,8 @@ class ExportSqlTest extends AbstractTestCase
         ExportPlugin::$exportType = ExportType::Table;
         ExportPlugin::$singleTable = false;
 
-        $this->object = new ExportSql(
-            new Relation($dbi),
-            new Export($dbi),
-            new Transformations(),
-        );
+        $relation = new Relation($dbi);
+        $this->object = new ExportSql($relation, new Export($dbi), new Transformations($dbi, $relation));
         $this->object->useSqlBackquotes(false);
     }
 
@@ -855,11 +853,13 @@ SQL;
 
         $this->object->setExportOptions($request, []);
 
-        $result = $this->object->getTableDef('db', 'table', true, false);
+        $this->expectException(ExportException::class);
+        $this->expectExceptionMessage('Error reading structure for table db.table: error occurred');
+
+        $this->object->getTableDef('db', 'table', true, false);
 
         $dbiDummy->assertAllQueriesConsumed();
         $dbiDummy->assertAllErrorCodesConsumed();
-        self::assertStringContainsString('-- Error reading structure for table db.table: error occurred', $result);
     }
 
     public function testGetTableComments(): void
@@ -886,7 +886,9 @@ SQL;
             );
 
         DatabaseInterface::$instance = $dbi;
-        $this->object->relation = new Relation($dbi);
+        $relation = new Relation($dbi);
+        $this->object = new ExportSql($relation, new Export($dbi), new Transformations($dbi, $relation));
+        $this->object->useSqlBackquotes(false);
 
         $request = ServerRequestFactory::create()->createServerRequest('POST', 'https://example.com/')
             ->withParsedBody(['sql_relation' => 'On', 'sql_mime' => 'On', 'sql_include_comments' => 'On']);
@@ -1257,15 +1259,12 @@ SQL;
 
         $this->object->setExportOptions($request, []);
 
-        ob_start();
+        $this->expectException(ExportException::class);
+        $this->expectExceptionMessage('Error reading data for table db.table: err');
+
         self::assertTrue(
             $this->object->exportData('db', 'table', 'SELECT'),
         );
-        $result = ob_get_clean();
-
-        self::assertIsString($result);
-
-        self::assertStringContainsString('-- Error reading data for table db.table: err', $result);
     }
 
     public function testMakeCreateTableMSSQLCompatible(): void
@@ -1400,7 +1399,8 @@ SQL;
             . "REFERENCES dept_master (baz)\n"
             . ') ENGINE=InnoDB  DEFAULT CHARSET=latin1 COLLATE='
             . "latin1_general_ci COMMENT='List' AUTO_INCREMENT=5";
-        $result = $this->object->replaceWithAliases(null, $sqlQuery, $aliases, $db);
+        $flag = false;
+        $result = $this->object->replaceWithAliases('', $sqlQuery, $aliases, $db, $flag);
 
         self::assertSame(
             "CREATE TABLE IF NOT EXISTS `bartest` (\n" .
@@ -1412,7 +1412,8 @@ SQL;
             $result,
         );
 
-        $result = $this->object->replaceWithAliases(null, $sqlQuery, [], '');
+        $flag = false;
+        $result = $this->object->replaceWithAliases('', $sqlQuery, [], '', $flag);
 
         self::assertSame(
             "CREATE TABLE IF NOT EXISTS foo (\n" .
@@ -1433,7 +1434,8 @@ SQL;
             . 'IF @cnt<>0 THEN '
             . 'SET NEW.xy=1; '
             . 'END IF; END';
-        $result = $this->object->replaceWithAliases('$$', $sqlQuery, $aliases, $db);
+        $flag = false;
+        $result = $this->object->replaceWithAliases('$$', $sqlQuery, $aliases, $db, $flag);
 
         self::assertSame(
             'CREATE TRIGGER `BEFORE_bar_INSERT` BEFORE INSERT ON `f` FOR EACH ROW BEGIN ' .
@@ -1467,7 +1469,8 @@ RETURN TextString ;
 END
 SQL;
 
-        $result = $this->object->replaceWithAliases('$$', $sqlQuery, $aliases, $db);
+        $flag = false;
+        $result = $this->object->replaceWithAliases('$$', $sqlQuery, $aliases, $db, $flag);
 
         $expectedQuery = <<<'SQL'
 CREATE FUNCTION `HTML_UnEncode` (`x` TEXT CHARSET utf8) RETURNS TEXT CHARSET utf8  BEGIN

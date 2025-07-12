@@ -51,11 +51,8 @@ class ExportXmlTest extends AbstractTestCase
         ExportPlugin::$singleTable = false;
         Current::$database = 'db';
         Config::getInstance()->selectedServer['DisableIS'] = true;
-        $this->object = new ExportXml(
-            new Relation($dbi),
-            new Export($dbi),
-            new Transformations(),
-        );
+        $relation = new Relation($dbi);
+        $this->object = new ExportXml($relation, new Export($dbi), new Transformations($dbi, $relation));
     }
 
     /**
@@ -179,8 +176,8 @@ class ExportXmlTest extends AbstractTestCase
         $config->selectedServer['DisableIS'] = false;
         Current::$database = 'd<"b';
 
-        $functions = [['d<"b', 'fn', 'FUNCTION']];
-        $procedures = [['d<"b', 'pr', 'PROCEDURE']];
+        $functions = [['fn']];
+        $procedures = [['pr']];
 
         $dbiDummy = $this->createDbiDummy();
         $dbi = $this->createDatabaseInterface($dbiDummy);
@@ -191,8 +188,18 @@ class ExportXmlTest extends AbstractTestCase
             [['utf-8', 'utf8_general_ci']],
             ['DEFAULT_CHARACTER_SET_NAME', 'DEFAULT_COLLATION_NAME'],
         );
-        $dbiDummy->addResult('SHOW FUNCTION STATUS;', $functions, ['Db', 'Name', 'Type']);
-        $dbiDummy->addResult('SHOW PROCEDURE STATUS;', $procedures, ['Db', 'Name', 'Type']);
+        $dbiDummy->addResult(
+            'SELECT SPECIFIC_NAME FROM information_schema.ROUTINES '
+            . "WHERE ROUTINE_SCHEMA = 'd<\\\"b' AND ROUTINE_TYPE = 'FUNCTION' AND SPECIFIC_NAME != ''",
+            $functions,
+            ['Name'],
+        );
+        $dbiDummy->addResult(
+            'SELECT SPECIFIC_NAME FROM information_schema.ROUTINES '
+            . "WHERE ROUTINE_SCHEMA = 'd<\\\"b' AND ROUTINE_TYPE = 'PROCEDURE' AND SPECIFIC_NAME != ''",
+            $procedures,
+            ['Name'],
+        );
         $dbiDummy->addResult('SHOW CREATE TABLE `d<"b`.`table`', [['table', '"tbl"']]);
         $dbiDummy->addResult(
             'SELECT 1 FROM information_schema.VIEWS WHERE TABLE_SCHEMA = \'d<\"b\' AND TABLE_NAME = \'table\'',
@@ -327,6 +334,7 @@ class ExportXmlTest extends AbstractTestCase
             '    &lt;/pma:structure_schemas&gt;',
             $result,
         );
+        $dbiDummy->assertAllQueriesConsumed();
     }
 
     public function testExportFooter(): void

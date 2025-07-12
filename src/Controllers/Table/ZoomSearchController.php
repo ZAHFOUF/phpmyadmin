@@ -77,6 +77,7 @@ final class ZoomSearchController implements InvocableController
         private readonly Relation $relation,
         private readonly DatabaseInterface $dbi,
         private readonly DbTableExists $dbTableExists,
+        private readonly Config $config,
     ) {
     }
 
@@ -91,7 +92,6 @@ final class ZoomSearchController implements InvocableController
         }
 
         UrlParams::$params = ['db' => Current::$database, 'table' => Current::$table];
-        $config = Config::getInstance();
 
         $databaseName = DatabaseName::tryFrom($request->getParam('db'));
         if ($databaseName === null || ! $this->dbTableExists->selectDatabase($databaseName)) {
@@ -138,7 +138,7 @@ final class ZoomSearchController implements InvocableController
         /**
          * Handle AJAX request for data row on point select
          */
-        if (isset($_POST['get_data_row']) && $_POST['get_data_row'] == true) {
+        if (isset($_POST['get_data_row']) && $_POST['get_data_row']) {
             $this->getDataRowAction();
 
             return $this->response->response();
@@ -178,7 +178,7 @@ final class ZoomSearchController implements InvocableController
         }
 
         if (UrlParams::$goto === '') {
-            UrlParams::$goto = Url::getFromRoute($config->settings['DefaultTabTable']);
+            UrlParams::$goto = Url::getFromRoute($this->config->settings['DefaultTabTable']);
         }
 
         $this->zoomSubmitAction($dataLabel, UrlParams::$goto);
@@ -210,7 +210,7 @@ final class ZoomSearchController implements InvocableController
             }
 
             // reformat mysql query output
-            if (strncasecmp($type, 'set', 3) == 0 || strncasecmp($type, 'enum', 4) == 0) {
+            if (strncasecmp($type, 'set', 3) === 0 || strncasecmp($type, 'enum', 4) === 0) {
                 $type = str_replace(',', ', ', $type);
             } else {
                 // strip the "BINARY" attribute, except if we find "BINARY(" because
@@ -244,9 +244,8 @@ final class ZoomSearchController implements InvocableController
      */
     private function displaySelectionFormAction(string $dataLabel): void
     {
-        $config = Config::getInstance();
         if (UrlParams::$goto === '') {
-            UrlParams::$goto = Url::getFromRoute($config->settings['DefaultTabTable']);
+            UrlParams::$goto = Url::getFromRoute($this->config->settings['DefaultTabTable']);
         }
 
         $criteriaColumnNames = $_POST['criteriaColumnNames'] ?? null;
@@ -279,7 +278,7 @@ final class ZoomSearchController implements InvocableController
             'criteria_column_types' => $_POST['criteriaColumnTypes'] ?? null,
             'max_plot_limit' => ! empty($_POST['maxPlotLimit'])
                 ? (int) $_POST['maxPlotLimit']
-                : (int) $config->settings['maxRowPlotLimit'],
+                : (int) $this->config->settings['maxRowPlotLimit'],
         ]);
     }
 
@@ -407,7 +406,7 @@ final class ZoomSearchController implements InvocableController
                 (string) $foreignData[$columnIndex]->foreignField,
                 $foreignData[$columnIndex]->foreignDisplay,
                 '',
-                Config::getInstance()->settings['ForeignKeyMaxLimit'],
+                $this->config->settings['ForeignKeyMaxLimit'],
             );
         }
 
@@ -502,7 +501,7 @@ final class ZoomSearchController implements InvocableController
                 $foreignData->foreignField,
                 $foreignData->foreignDisplay,
                 '',
-                Config::getInstance()->settings['ForeignKeyMaxLimit'],
+                $this->config->settings['ForeignKeyMaxLimit'],
             );
         }
 

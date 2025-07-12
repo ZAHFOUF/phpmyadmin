@@ -54,8 +54,7 @@ class EncodingTest extends AbstractTestCase
 
     public function testInvalidConversion(): void
     {
-        // Invalid value to use default case
-        Encoding::setEngine(-1);
+        Encoding::setEngine(Encoding::ENGINE_NONE);
         self::assertSame(
             'test',
             Encoding::convertString('UTF-8', 'anything', 'test'),
@@ -72,17 +71,15 @@ class EncodingTest extends AbstractTestCase
     public function testIconv(): void
     {
         // Set PHP native locale
-        if (function_exists('setlocale')) {
-            if (setlocale(0, 'POSIX') === false) {
-                self::markTestSkipped('native setlocale failed');
-            }
+        if (function_exists('setlocale') && setlocale(0, 'POSIX') === false) {
+            self::markTestSkipped('native setlocale failed');
         }
 
         _setlocale(LC_ALL, 'POSIX');
 
         $config = Config::getInstance();
         if (PHP_INT_SIZE === 8) {
-            $config->settings['IconvExtraParams'] = '//TRANSLIT';
+            $config->set('IconvExtraParams', '//TRANSLIT');
             Encoding::setEngine(Encoding::ENGINE_ICONV);
             self::assertSame(
                 "This is the Euro symbol 'EUR'.",
@@ -95,7 +92,7 @@ class EncodingTest extends AbstractTestCase
         } elseif (PHP_INT_SIZE === 4) {
             // NOTE: this does not work on 32bit systems and requires "//IGNORE"
             // NOTE: or it will throw "iconv(): Detected an illegal character in input string"
-            $config->settings['IconvExtraParams'] = '//TRANSLIT//IGNORE';
+            $config->set('IconvExtraParams', '//TRANSLIT//IGNORE');
             Encoding::setEngine(Encoding::ENGINE_ICONV);
             self::assertSame(
                 "This is the Euro symbol ''.",
@@ -110,7 +107,7 @@ class EncodingTest extends AbstractTestCase
 
     public function testMbstring(): void
     {
-        Encoding::setEngine(Encoding::ENGINE_MB);
+        Encoding::setEngine(Encoding::ENGINE_MBSTRING);
         self::assertSame(
             "This is the Euro symbol '?'.",
             Encoding::convertString(

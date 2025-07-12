@@ -14,6 +14,8 @@ use PhpMyAdmin\SqlParser\Context;
 use PhpMyAdmin\SqlParser\Token;
 use PhpMyAdmin\Utils\SessionCache;
 use Stringable;
+use Twig\Attribute\AsTwigFilter;
+use Twig\Attribute\AsTwigFunction;
 
 use function __;
 use function _pgettext;
@@ -78,6 +80,7 @@ use function strnatcasecmp;
 use function strrev;
 use function strtolower;
 use function strtr;
+use function substr;
 use function trim;
 use function uksort;
 
@@ -96,6 +99,7 @@ class Util
      *
      * @param string $value Configuration option name
      */
+    #[AsTwigFunction('show_icons')]
     public static function showIcons(string $value): bool
     {
         return in_array(Config::getInstance()->settings[$value], ['icons', 'both'], true);
@@ -106,6 +110,7 @@ class Util
      *
      * @param string $value Configuration option name
      */
+    #[AsTwigFunction('show_text')]
     public static function showText(string $value): bool
     {
         return in_array(Config::getInstance()->settings[$value], ['text', 'both'], true);
@@ -167,6 +172,7 @@ class Util
      *
      * @return string  the URL link
      */
+    #[AsTwigFunction('get_mysql_docu_url', isSafe: ['html'])]
     public static function getMySQLDocuURL(string $link, string $anchor = ''): string
     {
         // Fixup for newly used names:
@@ -208,6 +214,7 @@ class Util
      *
      * @return string The URL link
      */
+    #[AsTwigFunction('get_docu_url', isSafe: ['html'])]
     public static function getDocuURL(bool $isMariaDB = false): string
     {
         if ($isMariaDB) {
@@ -233,6 +240,7 @@ class Util
      *
      * @param Stringable|string|null $identifier the database, table or field name to "backquote"
      */
+    #[AsTwigFunction('backquote')]
     public static function backquote(Stringable|string|null $identifier): string
     {
         return static::backquoteCompat($identifier, 'NONE');
@@ -286,6 +294,7 @@ class Util
      * @return string[]|null the formatted value and its unit
      * @psalm-return ($value is null ? null : array{string, string})
      */
+    #[AsTwigFunction('format_byte_down')]
     public static function formatByteDown(float|int|string|null $value, int $limes = 6, int $comma = 0): array|null
     {
         if ($value === null) {
@@ -364,6 +373,7 @@ class Util
      *
      * @return string   the formatted value and its unit
      */
+    #[AsTwigFunction('format_number')]
     public static function formatNumber(
         float|int|string $value,
         int $digitsLeft = 3,
@@ -584,6 +594,7 @@ class Util
      *
      * @return string the formatted value
      */
+    #[AsTwigFunction('timespan_format')]
     public static function timespanFormat(int $seconds): string
     {
         $days = floor($seconds / 86400);
@@ -764,7 +775,7 @@ class Util
         }
 
         foreach ($pages as $i) {
-            if ($i == $pageNow) {
+            if ($i === $pageNow) {
                 $selected = 'selected style="font-weight: bold"';
             } else {
                 $selected = '';
@@ -841,7 +852,7 @@ class Util
     public static function printableBitValue(int $value, int $length): string
     {
         // if running on a 64-bit server or the length is safe for decbin()
-        if (PHP_INT_SIZE == 8 || $length < 33) {
+        if (PHP_INT_SIZE === 8 || $length < 33) {
             $printable = decbin($value);
         } else {
             // FIXME: does not work for the leftmost bit of a 64-bit value
@@ -880,6 +891,7 @@ class Util
      *
      * @return string the converted value
      */
+    #[AsTwigFilter('convert_bit_default_value')]
     public static function convertBitDefaultValue(string|null $bitDefaultValue): string
     {
         return (string) preg_replace(
@@ -908,6 +920,7 @@ class Util
      *  displayed_type : string,
      * }
      */
+    #[AsTwigFunction('extract_column_spec')]
     public static function extractColumnSpec(string $columnSpecification): array
     {
         $firstBracketPos = mb_strpos($columnSpecification, '(');
@@ -1171,19 +1184,9 @@ class Util
     }
 
     /**
-     * Returns a list of datatypes that are not (yet) handled by PMA.
-     * Used by: /table/change and libraries/Routines.php
-     *
-     * @return string[] list of datatypes
-     */
-    public static function unsupportedDatatypes(): array
-    {
-        return [];
-    }
-
-    /**
      * This function is to check whether database support UUID
      */
+    #[AsTwigFunction('is_uuid_supported')]
     public static function isUUIDSupported(): bool
     {
         return Compatibility::isUUIDSupported(DatabaseInterface::getInstance());
@@ -1321,6 +1324,7 @@ class Util
      *
      * @return string[]
      */
+    #[AsTwigFunction('parse_enum_set_values')]
     public static function parseEnumSetValues(string $definition, bool $escapeHtml = true): array
     {
         // There is a JS port of the below parser in functions.js
@@ -1454,7 +1458,7 @@ class Util
             return 'application/bzip2';
         }
 
-        if ($len >= 4 && $test == "PK\003\004") {
+        if ($len >= 4 && $test === "PK\003\004") {
             return 'application/zip';
         }
 
@@ -1479,57 +1483,6 @@ class Util
         }
 
         return '';
-    }
-
-    /**
-     * Process the index data.
-     *
-     * @param mixed[] $indexes index data
-     *
-     * @return mixed[] processes index data
-     */
-    public static function processIndexData(array $indexes): array
-    {
-        $lastIndex = '';
-
-        $primary = '';
-        $pkArray = []; // will be use to emphasis prim. keys in the table
-        $indexesInfo = [];
-        $indexesData = [];
-
-        // view
-        foreach ($indexes as $row) {
-            // Backups the list of primary keys
-            if ($row['Key_name'] === 'PRIMARY') {
-                $primary .= $row['Column_name'] . ', ';
-                $pkArray[$row['Column_name']] = 1;
-            }
-
-            // Retains keys informations
-            if ($row['Key_name'] != $lastIndex) {
-                $lastIndex = $row['Key_name'];
-            }
-
-            $indexesInfo[$row['Key_name']]['Sequences'][] = $row['Seq_in_index'];
-            $indexesInfo[$row['Key_name']]['Non_unique'] = $row['Non_unique'];
-            if (isset($row['Cardinality'])) {
-                $indexesInfo[$row['Key_name']]['Cardinality'] = $row['Cardinality'];
-            }
-
-            // I don't know what does following column mean....
-            // $indexes_info[$row['Key_name']]['Packed']          = $row['Packed'];
-
-            $indexesInfo[$row['Key_name']]['Comment'] = $row['Comment'];
-
-            $indexesData[$row['Key_name']][$row['Seq_in_index']]['Column_name'] = $row['Column_name'];
-            if (! isset($row['Sub_part'])) {
-                continue;
-            }
-
-            $indexesData[$row['Key_name']][$row['Seq_in_index']]['Sub_part'] = $row['Sub_part'];
-        }
-
-        return [$primary, $pkArray, $indexesInfo, $indexesData];
     }
 
     /**
@@ -1862,7 +1815,10 @@ class Util
      * @param string $initialSortOrder Initial sort order
      *
      * @return string Link to be displayed in the table header
+     *
+     * @psalm-api
      */
+    #[AsTwigFunction('sortable_table_header', isSafe: ['html'])]
     public static function sortableTableHeader(string $title, string $sort, string $initialSortOrder = 'ASC'): string
     {
         $requestedSort = 'table';
@@ -1879,7 +1835,7 @@ class Util
         $orderLinkParams = [];
         $orderLinkParams['title'] = __('Sort');
         // If this column was requested to be sorted.
-        if ($requestedSort == $sort) {
+        if ($requestedSort === $sort) {
             if ($requestedSortOrder === 'ASC') {
                 $futureSortOrder = 'DESC';
                 // current sort order is ASC
@@ -1978,7 +1934,10 @@ class Util
 
     public static function getTableListPosition(ServerRequest $request, string $db): int
     {
-        if (! isset($_SESSION['tmpval']['table_limit_offset']) || $_SESSION['tmpval']['table_limit_offset_db'] != $db) {
+        if (
+            ! isset($_SESSION['tmpval']['table_limit_offset'])
+            || $_SESSION['tmpval']['table_limit_offset_db'] !== $db
+        ) {
             $_SESSION['tmpval']['table_limit_offset'] = 0;
             $_SESSION['tmpval']['table_limit_offset_db'] = $db;
         }
@@ -2012,5 +1971,14 @@ class Util
         }
 
         return $size;
+    }
+
+    public static function unquoteDefaultValue(string $value): string
+    {
+        if (! str_starts_with($value, "'")) {
+            return $value;
+        }
+
+        return strtr(substr($value, 1, -1), ["''" => "'", "\\'" => "'", '\\\\' => '\\']);
     }
 }

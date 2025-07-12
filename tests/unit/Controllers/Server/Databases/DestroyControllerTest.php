@@ -36,14 +36,17 @@ class DestroyControllerTest extends AbstractTestCase
 
         $response = new ResponseRenderer();
 
-        Config::getInstance()->settings['AllowUserDropDatabase'] = true;
+        $config = Config::getInstance();
+        $config->settings['AllowUserDropDatabase'] = true;
 
+        $relation = new Relation($dbi);
         $controller = new DestroyController(
             $response,
             $dbi,
-            new Transformations(),
-            new RelationCleanup($dbi, new Relation($dbi)),
+            new Transformations($dbi, $relation),
+            new RelationCleanup($dbi, $relation),
             new UserPrivilegesFactory($dbi),
+            $config,
         );
 
         $request = self::createStub(ServerRequest::class);

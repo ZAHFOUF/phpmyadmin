@@ -22,7 +22,7 @@ use PhpMyAdmin\Http\Response;
 use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\Identifiers\DatabaseName;
 use PhpMyAdmin\Identifiers\TableName;
-use PhpMyAdmin\Index;
+use PhpMyAdmin\Indexes\Index;
 use PhpMyAdmin\Message;
 use PhpMyAdmin\Partitioning\Partition;
 use PhpMyAdmin\Query\Utilities;
@@ -39,23 +39,25 @@ use stdClass;
 use function __;
 use function in_array;
 use function str_contains;
+use function strtoupper;
 
 /**
  * Displays table structure infos like columns, indexes, size, rows
  * and allows manipulation of indexes and columns.
  */
-class StructureController implements InvocableController
+readonly class StructureController implements InvocableController
 {
-    private readonly Table $tableObj;
+    private Table $tableObj;
 
     public function __construct(
-        private readonly ResponseRenderer $response,
-        private readonly Template $template,
-        private readonly Relation $relation,
-        private readonly Transformations $transformations,
-        private readonly DatabaseInterface $dbi,
-        private readonly PageSettings $pageSettings,
-        private readonly DbTableExists $dbTableExists,
+        private ResponseRenderer $response,
+        private Template $template,
+        private Relation $relation,
+        private Transformations $transformations,
+        private DatabaseInterface $dbi,
+        private PageSettings $pageSettings,
+        private DbTableExists $dbTableExists,
+        private Config $config,
     ) {
         $this->tableObj = $this->dbi->getTable(Current::$database, Current::$table);
     }
@@ -149,17 +151,16 @@ class StructureController implements InvocableController
             $tableStorageEngine = __('View');
         } else {
             $tableIsAView = false;
-            $tableStorageEngine = $this->tableObj->getStorageEngine();
+            $tableStorageEngine = strtoupper($this->tableObj->getStorageEngine());
         }
 
         // prepare comments
         $commentsMap = [];
         $mimeMap = [];
 
-        $config = Config::getInstance();
-        if ($config->settings['ShowPropertyComments']) {
+        if ($this->config->settings['ShowPropertyComments']) {
             $commentsMap = $this->relation->getComments(Current::$database, Current::$table);
-            if ($relationParameters->browserTransformationFeature !== null && $config->settings['BrowseMIME']) {
+            if ($relationParameters->browserTransformationFeature !== null && $this->config->settings['BrowseMIME']) {
                 $mimeMap = $this->transformations->getMime(Current::$database, Current::$table, true);
             }
         }
@@ -175,7 +176,7 @@ class StructureController implements InvocableController
          */
         // BEGIN - Calc Table Space
         // Get valid statistics whatever is the table type
-        if ($config->settings['ShowStats']) {
+        if ($this->config->settings['ShowStats']) {
             //get table stats in HTML format
             $tablestats = $this->getTableStats($isSystemSchema, $tableIsAView, $tableStorageEngine);
             //returning the response in JSON format to be used by Ajax
@@ -222,7 +223,7 @@ class StructureController implements InvocableController
 
             $collation = Charsets::findCollationByName(
                 $this->dbi,
-                $config->selectedServer['DisableIS'],
+                $this->config->selectedServer['DisableIS'],
                 $field->collation ?? '',
             );
             if ($collation === null) {
@@ -235,15 +236,13 @@ class StructureController implements InvocableController
             ];
         }
 
-        $engine = $this->tableObj->getStorageEngine();
-
         return $this->template->render('table/structure/display_structure', [
             'collations' => $collations,
-            'is_foreign_key_supported' => ForeignKey::isSupported($engine),
+            'is_foreign_key_supported' => ForeignKey::isSupported($tableStorageEngine),
             'indexes' => Index::getFromTable($this->dbi, Current::$table, Current::$database),
             'indexes_duplicates' => Index::findDuplicates(Current::$table, Current::$database),
             'relation_parameters' => $relationParameters,
-            'hide_structure_actions' => $config->settings['HideStructureActions'] === true,
+            'hide_structure_actions' => $this->config->settings['HideStructureActions'] === true,
             'db' => Current::$database,
             'table' => Current::$table,
             'db_is_system_schema' => $isSystemSchema,
@@ -258,16 +257,16 @@ class StructureController implements InvocableController
             'columns_with_index' => $columnsWithIndex,
             'central_list' => $centralList,
             'comments_map' => $commentsMap,
-            'browse_mime' => $config->settings['BrowseMIME'],
-            'show_column_comments' => $config->settings['ShowColumnComments'],
-            'show_stats' => $config->settings['ShowStats'],
+            'browse_mime' => $this->config->settings['BrowseMIME'],
+            'show_column_comments' => $this->config->settings['ShowColumnComments'],
+            'show_stats' => $this->config->settings['ShowStats'],
             'mysql_int_version' => $this->dbi->getVersion(),
             'is_mariadb' => $this->dbi->isMariaDB(),
             'is_active' => Tracker::isActive(),
             'have_partitioning' => Partition::havePartitioning(),
             'partitions' => Partition::getPartitions(Current::$database, Current::$table),
             'partition_names' => Partition::getPartitionNames(Current::$database, Current::$table),
-            'default_sliders_state' => $config->settings['InitialSlidersState'],
+            'default_sliders_state' => $this->config->settings['InitialSlidersState'],
             'attributes' => $attributes,
             'displayed_fields' => $displayedFields,
             'row_comments' => $rowComments,
@@ -350,7 +349,7 @@ class StructureController implements InvocableController
         $tableCollation = [];
         $collation = Charsets::findCollationByName(
             $this->dbi,
-            Config::getInstance()->selectedServer['DisableIS'],
+            $this->config->selectedServer['DisableIS'],
             $this->tableObj->getCollation(),
         );
         if ($collation !== null) {

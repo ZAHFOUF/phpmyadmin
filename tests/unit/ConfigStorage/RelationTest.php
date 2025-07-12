@@ -64,7 +64,8 @@ class RelationTest extends AbstractTestCase
                 . ' `COLUMN_COMMENT` AS `Comment`'
                 . ' FROM `information_schema`.`COLUMNS`'
                 . ' WHERE `TABLE_SCHEMA` COLLATE utf8_bin = \'information_schema\' AND'
-                . ' `TABLE_NAME` COLLATE utf8_bin = \'PMA\'',
+                . ' `TABLE_NAME` COLLATE utf8_bin = \'PMA\''
+                . ' ORDER BY `ORDINAL_POSITION`',
             [],
         );
 
@@ -108,7 +109,8 @@ class RelationTest extends AbstractTestCase
                 . ' `COLUMN_COMMENT` AS `Comment`'
                 . ' FROM `information_schema`.`COLUMNS`'
                 . ' WHERE `TABLE_SCHEMA` COLLATE utf8_bin = \'information_schema\' AND'
-                . ' `TABLE_NAME` COLLATE utf8_bin = \'NON_EXISTING_TABLE\'',
+                . ' `TABLE_NAME` COLLATE utf8_bin = \'NON_EXISTING_TABLE\''
+                . ' ORDER BY `ORDINAL_POSITION`',
             [],
         );
         $db = 'information_schema';
@@ -2238,6 +2240,27 @@ class RelationTest extends AbstractTestCase
         );
 
         $relation->renameTable('db\'1', 'db\'1', 'table\'1', 'table\'2');
+
+        $dummyDbi->assertAllQueriesConsumed();
+    }
+
+    public function testGetTablesReturnsFilteredTables(): void
+    {
+        $dummyDbi = $this->createDbiDummy();
+        $dbi = $this->createDatabaseInterface($dummyDbi);
+
+        $dummyDbi->addResult(
+            "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'somedb' AND ENGINE = 'InnoDB'",
+            [
+                ['table1'],
+                ['table3'],
+            ],
+        );
+
+        $relation = new Relation($dbi);
+
+        $tables = $relation->getTables('somedb', 'InnoDB');
+        self::assertEquals(['table1', 'table3'], $tables);
 
         $dummyDbi->assertAllQueriesConsumed();
     }

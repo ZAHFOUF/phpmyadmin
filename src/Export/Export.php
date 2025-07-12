@@ -73,7 +73,7 @@ class Export
 
     public int $dumpBufferLength = 0;
 
-    /** @var mixed[] */
+    /** @var string[] */
     public array $dumpBufferObjects = [];
 
     public static bool $asFile = false;
@@ -184,7 +184,7 @@ class Export
                         $writeResult = @fwrite(self::$fileHandle, $this->dumpBuffer);
                         // Here, use strlen rather than mb_strlen to get the length
                         // in bytes to compare against the number of bytes written.
-                        if ($writeResult != strlen($this->dumpBuffer)) {
+                        if ($writeResult === false || $writeResult !== strlen($this->dumpBuffer)) {
                             Current::$message = Message::error(
                                 __('Insufficient space to save the file %s.'),
                             );
@@ -212,15 +212,10 @@ class Export
             }
 
             if (self::$saveOnServer && $line !== '') {
-                if (self::$fileHandle !== null) {
-                    $writeResult = @fwrite(self::$fileHandle, $line);
-                } else {
-                    $writeResult = false;
-                }
-
+                $writeResult = self::$fileHandle !== null ? @fwrite(self::$fileHandle, $line) : false;
                 // Here, use strlen rather than mb_strlen to get the length
                 // in bytes to compare against the number of bytes written.
-                if ($writeResult === 0 || $writeResult === false || $writeResult != strlen($line)) {
+                if ($writeResult === 0 || $writeResult === false || $writeResult !== strlen($line)) {
                     Current::$message = Message::error(
                         __('Insufficient space to save the file %s.'),
                     );
@@ -446,9 +441,9 @@ class Export
     /**
      * Compress the export buffer
      *
-     * @param mixed[]|string $dumpBuffer  the current dump buffer
-     * @param string         $compression the compression mode
-     * @param string         $filename    the filename
+     * @param string[]|string $dumpBuffer  the current dump buffer
+     * @param string          $compression the compression mode
+     * @param string          $filename    the filename
      */
     public function compress(array|string $dumpBuffer, string $compression, string $filename): array|string|bool
     {

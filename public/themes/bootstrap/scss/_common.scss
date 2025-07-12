@@ -508,8 +508,6 @@ div {
   }
 
   &#queryAnalyzerDialog {
-    min-width: 700px;
-
     div {
       &.CodeMirror-scroll {
         height: auto;
@@ -1107,7 +1105,8 @@ input#auto_increment_opt {
 }
 
 #table_name_col_no_outer {
-  margin-top: 45px;
+  display: flex;
+  flex-wrap: wrap;
 }
 
 #table_name_col_no {
@@ -1222,15 +1221,6 @@ input#auto_increment_opt {
 .pma_table {
   td {
     position: static;
-  }
-
-  tbody td span {
-    display: block;
-    overflow: hidden;
-
-    code span {
-      display: inline;
-    }
   }
 
   th.draggable {
@@ -1355,6 +1345,7 @@ input#auto_increment_opt {
 
   input {
     &[type=submit] {
+      color: var(--bs-body-color);
       background: none;
       border: 0;
       filter: none;
@@ -1366,7 +1357,8 @@ input#auto_increment_opt {
         color: $white;
         cursor: pointer;
         text-shadow: none;
-        background: linear-gradient(#333, #555);
+        background-color: var(--bs-btn-hover-bg);
+        border-color: var(--bs-btn-hover-border-color);
       }
     }
 
@@ -1547,10 +1539,6 @@ div#page_content div {
   label {
     font-weight: bold;
   }
-}
-
-.ui-dialog {
-  position: fixed;
 }
 
 .small_font {
@@ -2273,34 +2261,6 @@ th {
 
 // end of styles of sortable tables
 
-// styles for jQuery-ui to support rtl languages
-body .ui-dialog {
-  .ui-dialog-titlebar-close {
-    right: 0.3em;
-    left: initial;
-  }
-
-  .ui-dialog-title {
-    float: left;
-  }
-
-  .ui-dialog-buttonpane .ui-dialog-buttonset {
-    float: right;
-  }
-
-  .ui-dialog-buttonpane .ui-dialog-buttonset button {
-    color: $white;
-    background: none;
-    background-color: #6c757d !important;
-    border-color: #6c757d;
-  }
-
-  .ui-dialog-buttonpane .ui-dialog-buttonset button:hover {
-    background-color: #5a6268 !important;
-  }
-}
-// end of styles for jQuery-ui to support rtl languages
-
 // templates/database/designer
 // side menu
 #name-panel {
@@ -2349,11 +2309,6 @@ body .ui-dialog {
       min-width: 100%;
     }
   }
-
-  .ui-dialog {
-    margin: 1%;
-    width: 95% !important;
-  }
 }
 
 #tooltip_editor {
@@ -2396,4 +2351,8 @@ body .ui-dialog {
 
 .table-responsive-md .data {
   z-index: 9;
+}
+
+pre {
+  margin: 0;
 }

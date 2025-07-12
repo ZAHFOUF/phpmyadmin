@@ -12,6 +12,10 @@
     xmlns="https://getpsalm.org/schema/config"
     xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
     errorBaseline="psalm-baseline.xml"
+    ignoreInternalFunctionFalseReturn="true"
+    ignoreInternalFunctionNullReturn="true"
+    ensureOverrideAttribute="false"
+    strictBinaryOperands="false"
 >
     <projectFiles>
         <directory name="app"/>
@@ -36,4 +40,7 @@
     <plugins>
         <pluginClass class="Psalm\PhpUnitPlugin\Plugin"/>
     </plugins>
+    <issueHandlers>
+        <ClassMustBeFinal errorLevel="suppress" />
+    </issueHandlers>
 </psalm>

@@ -13,7 +13,7 @@ use PhpMyAdmin\Dbal\DatabaseInterface;
 use PhpMyAdmin\Dbal\DbiExtension;
 use PhpMyAdmin\Dbal\ResultInterface;
 use PhpMyAdmin\I18n\LanguageManager;
-use PhpMyAdmin\Index;
+use PhpMyAdmin\Indexes\Index;
 use PhpMyAdmin\Query\Utilities;
 use PhpMyAdmin\SqlParser\Context;
 use PhpMyAdmin\Utils\SessionCache;
@@ -762,7 +762,7 @@ class DatabaseInterfaceTest extends AbstractTestCase
         $resultStub = self::createStub(ResultInterface::class);
         $dummyDbi = $this->createMock(DbiExtension::class);
         $dummyDbi->expects(self::once())->method('executeQuery')
-            ->with(self::isType('object'), self::equalTo($query), self::equalTo(['root', 'localhost']))
+            ->with(self::isObject(), self::equalTo($query), self::equalTo(['root', 'localhost']))
             ->willReturn($resultStub);
         $dbi = $this->createDatabaseInterface($dummyDbi);
         $stmt = $dbi->executeQuery($query, ['root', 'localhost'], ConnectionType::ControlUser);
@@ -865,7 +865,8 @@ class DatabaseInterfaceTest extends AbstractTestCase
                 . ' FROM `information_schema`.`COLUMNS`'
                 . ' WHERE `TABLE_SCHEMA` COLLATE utf8_bin = \'test_db\' AND'
                 . ' `TABLE_NAME` COLLATE utf8_bin = \'test_table\''
-                . ' AND `COLUMN_NAME` = \'test_column\'',
+                . ' AND `COLUMN_NAME` = \'test_column\''
+                . ' ORDER BY `ORDINAL_POSITION`',
             [['test_column', 'varchar(45)', null, 'NO', '', null, '', '', '']],
             ['Field', 'Type', 'Collation', 'Null', 'Key', 'Default', 'Extra', 'Privileges', 'Comment'],
         );
@@ -889,7 +890,8 @@ class DatabaseInterfaceTest extends AbstractTestCase
                 . ' FROM `information_schema`.`COLUMNS`'
                 . ' WHERE `TABLE_SCHEMA` COLLATE utf8_bin = \'test_db\' AND'
                 . ' `TABLE_NAME` COLLATE utf8_bin = \'test_table\''
-                . ' AND `COLUMN_NAME` = \'test_column\'',
+                . ' AND `COLUMN_NAME` = \'test_column\''
+                . ' ORDER BY `ORDINAL_POSITION`',
             // phpcs:ignore Generic.Files.LineLength.TooLong
             [['test_column', 'varchar(45)', 'utf8mb4_general_ci', 'NO', '', null, '', 'select,insert,update,references', '']],
             ['Field', 'Type', 'Collation', 'Null', 'Key', 'Default', 'Extra', 'Privileges', 'Comment'],

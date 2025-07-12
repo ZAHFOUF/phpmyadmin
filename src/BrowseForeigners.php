@@ -35,13 +35,13 @@ class BrowseForeigners
     /**
      * Function to get html for one relational key
      *
-     * @param int     $horizontalCount    the current horizontal count
-     * @param string  $header             table header
-     * @param mixed[] $keys               all the keys
-     * @param int     $indexByKeyname     index by keyname
-     * @param mixed[] $descriptions       descriptions
-     * @param int     $indexByDescription index by description
-     * @param string  $currentValue       current value on the edit form
+     * @param int      $horizontalCount    the current horizontal count
+     * @param string   $header             table header
+     * @param mixed[]  $keys               all the keys
+     * @param int      $indexByKeyname     index by keyname
+     * @param string[] $descriptions       descriptions
+     * @param int      $indexByDescription index by description
+     * @param string   $currentValue       current value on the edit form
      *
      * @return array{string, int, int} the generated html
      */
@@ -104,7 +104,7 @@ class BrowseForeigners
         ]);
 
         $output .= '<td width="20%"><img src="'
-            . $this->themeManager->theme->getImgPath('spacer.png')
+            . $this->themeManager->getThemeImagePath('spacer.png')
             . '" alt="" width="1" height="1"></td>';
 
         $output .= $this->template->render('table/browse_foreigners/column_element', [

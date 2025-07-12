@@ -20,6 +20,9 @@ use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\Identifiers\DatabaseName;
 use PhpMyAdmin\Message;
 use PhpMyAdmin\ResponseRenderer;
+use PhpMyAdmin\SqlParser\Components\Limit;
+use PhpMyAdmin\SqlParser\Parser;
+use PhpMyAdmin\SqlParser\Statements\SelectStatement;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Url;
 use PhpMyAdmin\UrlParams;
@@ -35,14 +38,15 @@ use function ob_start;
 /**
  * Handles creation of the GIS visualizations.
  */
-final class GisVisualizationController implements InvocableController
+final readonly class GisVisualizationController implements InvocableController
 {
     public function __construct(
-        private readonly ResponseRenderer $response,
-        private readonly Template $template,
-        private readonly DatabaseInterface $dbi,
-        private readonly DbTableExists $dbTableExists,
-        private readonly ResponseFactory $responseFactory,
+        private ResponseRenderer $response,
+        private Template $template,
+        private DatabaseInterface $dbi,
+        private DbTableExists $dbTableExists,
+        private ResponseFactory $responseFactory,
+        private Config $config,
     ) {
     }
 
@@ -79,18 +83,7 @@ final class GisVisualizationController implements InvocableController
             return $this->response->response();
         }
 
-        $meta = $this->getColumnMeta($sqlQuery);
-
-        // Find the candidate fields for label column and spatial column
-        $labelCandidates = [];
-        $spatialCandidates = [];
-        foreach ($meta as $columnMeta) {
-            if ($columnMeta->isMappedTypeGeometry) {
-                $spatialCandidates[] = $columnMeta->name;
-            } else {
-                $labelCandidates[] = $columnMeta->name;
-            }
-        }
+        [$labelCandidates, $spatialCandidates] = $this->getCandidateColumns($sqlQuery);
 
         if ($spatialCandidates === []) {
             $this->response->setRequestStatus(false);
@@ -123,7 +116,7 @@ final class GisVisualizationController implements InvocableController
             return $response->write((string) $output);
         }
 
-        $this->response->addScriptFiles(['vendor/openlayers/OpenLayers.js', 'table/gis_visualization.js']);
+        $this->response->addScriptFiles(['vendor/openlayers/openlayers.js', 'table/gis_visualization.js']);
 
         // If all the rows contain SRID, use OpenStreetMaps on the initial loading.
         $useBaseLayer = isset($_POST['redraw']) ? isset($_POST['useBaseLayer']) : $visualization->hasSrid();
@@ -132,7 +125,7 @@ final class GisVisualizationController implements InvocableController
          * Displays the page
          */
         $urlParams = UrlParams::$params;
-        $urlParams['goto'] = Url::getFromRoute(Config::getInstance()->settings['DefaultTabDatabase']);
+        $urlParams['goto'] = Url::getFromRoute($this->config->settings['DefaultTabDatabase']);
         $urlParams['back'] = Url::getFromRoute('/sql');
         $urlParams['sql_query'] = $sqlQuery;
         $urlParams['sql_signature'] = Core::signSqlQuery($sqlQuery);
@@ -236,7 +229,7 @@ final class GisVisualizationController implements InvocableController
         }
 
         if ($_SESSION['tmpval']['max_rows'] === 'all') {
-            return Config::getInstance()->settings['MaxRows'];
+            return $this->config->settings['MaxRows'];
         }
 
         return (int) $_SESSION['tmpval']['max_rows'];
@@ -252,5 +245,29 @@ final class GisVisualizationController implements InvocableController
         $result = $this->dbi->tryQuery($sqlQuery);
 
         return $result === false ? [] : $this->dbi->getFieldsMeta($result);
+    }
+
+    /** @return array{list<string>, list<string>} */
+    private function getCandidateColumns(string $sqlQuery): array
+    {
+        $parser = new Parser($sqlQuery);
+        /** @var SelectStatement $statement */
+        $statement = $parser->statements[0];
+        $statement->limit = new Limit(0, 0);
+        $limitedSqlQuery = $statement->build();
+
+        $meta = $this->getColumnMeta($limitedSqlQuery);
+
+        $labelCandidates = [];
+        $spatialCandidates = [];
+        foreach ($meta as $columnMeta) {
+            if ($columnMeta->isMappedTypeGeometry) {
+                $spatialCandidates[] = $columnMeta->name;
+            } else {
+                $labelCandidates[] = $columnMeta->name;
+            }
+        }
+
+        return [$labelCandidates, $spatialCandidates];
     }
 }

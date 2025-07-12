@@ -15,7 +15,7 @@ use PhpMyAdmin\Dbal\DatabaseInterface;
 use PhpMyAdmin\FieldMetadata;
 use PhpMyAdmin\Html\Generator;
 use PhpMyAdmin\Html\MySQLDocumentation;
-use PhpMyAdmin\Index;
+use PhpMyAdmin\Indexes\Index;
 use PhpMyAdmin\Message;
 use PhpMyAdmin\Query\Compatibility;
 use PhpMyAdmin\Query\Generator as QueryGenerator;
@@ -34,7 +34,6 @@ use function array_merge;
 use function count;
 use function end;
 use function explode;
-use function htmlspecialchars;
 use function implode;
 use function in_array;
 use function intval;
@@ -189,7 +188,7 @@ class Table implements Stringable
     public function isEngine(array|string $engine): bool
     {
         $engine = (array) $engine;
-        $tableStorageEngine = $this->getStorageEngine();
+        $tableStorageEngine = strtoupper($this->getStorageEngine());
 
         return in_array($tableStorageEngine, $engine, true);
     }
@@ -301,7 +300,7 @@ class Table implements Stringable
     {
         $tableStorageEngine = $this->getStatusInfo('ENGINE');
 
-        return strtoupper((string) $tableStorageEngine);
+        return (string) $tableStorageEngine;
     }
 
     /**
@@ -661,12 +660,12 @@ class Table implements Stringable
             $rowCount = $this->dbi->fetchValue(
                 'SELECT COUNT(*) FROM ' . Util::backquote($this->dbName) . '.' . Util::backquote($this->name),
             );
-        } elseif ($config->settings['MaxExactCountViews'] == 0) {
+        } elseif ($config->settings['MaxExactCountViews'] === 0) {
             // For complex views, even trying to get a partial record
             // count could bring down a server, so we offer an
             // alternative: setting MaxExactCountViews to 0 will bypass
             // completely the record counting for views
-            $rowCount = false;
+            return -1;
         } else {
             // Counting all rows of a VIEW could be too long,
             // so use a LIMIT clause.
@@ -679,6 +678,10 @@ class Table implements Stringable
             );
             if ($result) {
                 $rowCount = $result->numRows();
+                if ((int) $rowCount === $config->settings['MaxExactCountViews']) {
+                    // If we reached the limit, we can't be sure how many rows there are
+                    return -1;
+                }
             }
         }
 
@@ -688,7 +691,7 @@ class Table implements Stringable
             return (int) $rowCount;
         }
 
-        return 0;
+        return -1;
     }
 
     /**
@@ -870,8 +873,8 @@ class Table implements Stringable
 
         $this->messages[] = sprintf(
             __('Table %1$s has been renamed to %2$s.'),
-            htmlspecialchars($oldName),
-            htmlspecialchars($newName),
+            $oldName,
+            $newName,
         );
 
         return true;
@@ -1205,7 +1208,7 @@ class Table implements Stringable
         }
 
         // check if the table has not been modified
-        if ($this->getStatusInfo('Create_time') == $this->uiprefs['CREATE_TIME']) {
+        if ($this->getStatusInfo('Create_time') === $this->uiprefs['CREATE_TIME']) {
             return array_map(intval(...), $this->uiprefs[$property->value]);
         }
 
@@ -1238,7 +1241,7 @@ class Table implements Stringable
             && ($property === UiProperty::ColumnOrder || $property === UiProperty::ColumnVisibility)
         ) {
             $currCreateTime = $this->getStatusInfo('CREATE_TIME');
-            if ($tableCreateTime === null || $tableCreateTime != $currCreateTime) {
+            if ($tableCreateTime === null || $tableCreateTime !== $currCreateTime) {
                 // there is no $table_create_time, or
                 // supplied $table_create_time is older than current create time,
                 // so don't save
@@ -1374,7 +1377,11 @@ class Table implements Stringable
             $masterField = $multiEditColumnsName[$masterFieldMd5];
             $foreignTable = $destinationTable[$masterFieldMd5];
             $foreignField = $destinationColumn[$masterFieldMd5];
-            if (! empty($foreignDb) && ! empty($foreignTable) && ! empty($foreignField)) {
+            if (
+                $foreignDb !== ''
+                && $foreignTable !== '' && $foreignTable !== null
+                && $foreignField !== '' && $foreignField !== null
+            ) {
                 if (! isset($existrel[$masterField])) {
                     $updQuery = 'INSERT INTO '
                         . Util::backquote($relationFeature->database)
@@ -1389,9 +1396,9 @@ class Table implements Stringable
                         . $this->dbi->quoteString($foreignTable, ConnectionType::ControlUser) . ','
                         . $this->dbi->quoteString($foreignField, ConnectionType::ControlUser) . ')';
                 } elseif (
-                    $existrel[$masterField]['foreign_db'] != $foreignDb
-                    || $existrel[$masterField]['foreign_table'] != $foreignTable
-                    || $existrel[$masterField]['foreign_field'] != $foreignField
+                    $existrel[$masterField]['foreign_db'] !== $foreignDb
+                    || $existrel[$masterField]['foreign_table'] !== $foreignTable
+                    || $existrel[$masterField]['foreign_field'] !== $foreignField
                 ) {
                     $updQuery = 'UPDATE '
                         . Util::backquote($relationFeature->database)
@@ -1474,20 +1481,20 @@ class Table implements Stringable
             $emptyFields = false;
             foreach ($masterField as $key => $oneField) {
                 if (
-                    (! empty($oneField) && empty($foreignField[$key]))
-                    || (empty($oneField) && ! empty($foreignField[$key]))
+                    ($oneField !== '' && (! isset($foreignField[$key]) || $foreignField[$key] === ''))
+                    || ($oneField === '' && (isset($foreignField[$key]) && $foreignField[$key] !== ''))
                 ) {
                     $emptyFields = true;
                 }
 
-                if (! empty($oneField) || ! empty($foreignField[$key])) {
+                if ($oneField !== '' || (isset($foreignField[$key]) && $foreignField[$key] !== '')) {
                     continue;
                 }
 
                 unset($masterField[$key], $foreignField[$key]);
             }
 
-            if (! empty($foreignDb) && ! empty($foreignTable) && ! $emptyFields) {
+            if ($foreignDb !== '' && $foreignTable !== '' && ! $emptyFields) {
                 if (isset($existrelForeign[$masterFieldMd5])) {
                     $constraintName = $existrelForeign[$masterFieldMd5]->constraint;
                     $onDelete = ! empty($existrelForeign[$masterFieldMd5]->onDelete)
@@ -1500,11 +1507,11 @@ class Table implements Stringable
                     if (
                         $refDbName != $foreignDb
                         || $existrelForeign[$masterFieldMd5]->refTableName != $foreignTable
-                        || $existrelForeign[$masterFieldMd5]->refIndexList != $foreignField
-                        || $existrelForeign[$masterFieldMd5]->indexList != $masterField
+                        || $existrelForeign[$masterFieldMd5]->refIndexList !== $foreignField
+                        || $existrelForeign[$masterFieldMd5]->indexList !== $masterField
                         || $_POST['constraint_name'][$masterFieldMd5] != $constraintName
-                        || ($_POST['on_delete'][$masterFieldMd5] != $onDelete)
-                        || ($_POST['on_update'][$masterFieldMd5] != $onUpdate)
+                        || ($_POST['on_delete'][$masterFieldMd5] !== $onDelete)
+                        || ($_POST['on_update'][$masterFieldMd5] !== $onUpdate)
                     ) {
                         // another foreign key is already defined for this field
                         // or an option has been changed for ON DELETE or ON UPDATE
@@ -1540,7 +1547,7 @@ class Table implements Stringable
                 }
             }
 
-            $tmpErrorCreate = false;
+            $tmpErrorCreate = '';
             if (! $create) {
                 continue;
             }
@@ -1563,7 +1570,7 @@ class Table implements Stringable
                 if ($tmpErrorCreate !== '') {
                     $seenError = true;
 
-                    if (substr($tmpErrorCreate, 1, 4) == '1005') {
+                    if (substr($tmpErrorCreate, 1, 4) === '1005') {
                         $message = Message::error(
                             __(
                                 'Error creating foreign key on %1$s (check data types)',
@@ -1583,7 +1590,7 @@ class Table implements Stringable
 
             // this is an alteration and the old constraint has been dropped
             // without creation of a new one
-            if (! $drop || $tmpErrorCreate === '' || $tmpErrorCreate === false) {
+            if (! $drop || $tmpErrorCreate === '') {
                 continue;
             }
 
@@ -1591,8 +1598,8 @@ class Table implements Stringable
             $sqlQueryRecreate = '# Restoring the dropped constraint...' . "\n";
             $sqlQueryRecreate .= $this->getSQLToCreateForeignKey(
                 $table,
-                $masterField,
-                $existrelForeign[$masterFieldMd5]->refDbName,
+                $existrelForeign[$masterFieldMd5]->indexList,
+                $existrelForeign[$masterFieldMd5]->refDbName ?? Current::$database,
                 $existrelForeign[$masterFieldMd5]->refTableName,
                 $existrelForeign[$masterFieldMd5]->refIndexList,
                 $existrelForeign[$masterFieldMd5]->constraint,
@@ -1709,7 +1716,7 @@ class Table implements Stringable
             $fields = TableUtils::getFields($stmt);
         }
 
-        if ($column != null) {
+        if ($column !== null && $column !== '') {
             $expression = isset($fields[$column]['expr']) ? substr($fields[$column]['expr'], 1, -1) : '';
 
             return [$column => $expression];
@@ -1742,23 +1749,12 @@ class Table implements Stringable
     /**
      * Returns the real row count for a table
      */
-    public function getRealRowCountTable(): int|null
+    public function getRealRowCountTable(): int
     {
-        // SQL query to get row count for a table.
-        $result = $this->dbi->fetchSingleRow(
-            sprintf(
-                'SELECT COUNT(*) AS %s FROM %s.%s',
-                Util::backquote('row_count'),
-                Util::backquote($this->dbName),
-                Util::backquote($this->name),
-            ),
+        return (int) $this->dbi->fetchValue(
+            'SELECT COUNT(*) FROM ' . Util::backquote($this->dbName) . '.'
+            . Util::backquote($this->name),
         );
-
-        if ($result === []) {
-            return null;
-        }
-
-        return (int) $result['row_count'];
     }
 
     /**

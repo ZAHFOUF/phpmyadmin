@@ -9,7 +9,8 @@ use PhpMyAdmin\BrowseForeigners;
 use PhpMyAdmin\Config;
 use PhpMyAdmin\ConfigStorage\Relation;
 use PhpMyAdmin\ConfigStorage\RelationCleanup;
-use PhpMyAdmin\Console;
+use PhpMyAdmin\Console\Console;
+use PhpMyAdmin\Console\History;
 use PhpMyAdmin\CreateAddField;
 use PhpMyAdmin\Database\CentralColumns;
 use PhpMyAdmin\Database\Designer;
@@ -75,6 +76,7 @@ return [
                 '$config' => '@config',
                 '$template' => '@template',
                 '$responseFactory' => '@' . ResponseFactory::class,
+                '$history' => '@history',
             ],
         ],
         'browse_foreigners' => [
@@ -202,7 +204,7 @@ return [
         'table_maintenance' => ['class' => PhpMyAdmin\Table\Maintenance::class, 'arguments' => ['$dbi' => '@dbi']],
         'table_search' => ['class' => Search::class, 'arguments' => ['$dbi' => '@dbi']],
         'template' => ['class' => Template::class, 'arguments' => ['$config' => '@config']],
-        ThemeManager::class => ['class' => PhpMyAdmin\Theme\ThemeManager::class],
+        ThemeManager::class => ['class' => ThemeManager::class],
         'tracking' => [
             'class' => Tracking::class,
             'arguments' => [
@@ -217,7 +219,8 @@ return [
             'class' => TrackingChecker::class,
             'arguments' => ['$dbi' => '@dbi', '$relation' => '@relation'],
         ],
-        'transformations' => ['class' => Transformations::class],
+        'transformations' => ['class' => Transformations::class, 'arguments' => ['@dbi', '@relation']],
+        Transformations::class => 'transformations',
         'triggers' => ['class' => Triggers::class, 'arguments' => ['@dbi']],
         'user_password' => [
             'class' => UserPassword::class,
@@ -229,7 +232,14 @@ return [
         DatabaseInterface::class => 'dbi',
         PhpMyAdmin\ResponseRenderer::class => 'response',
         'bookmarkRepository' => ['class' => BookmarkRepository::class, 'arguments' => ['@dbi', '@relation']],
-        'console' => ['class' => Console::class, 'arguments' => [ '@relation', '@template', '@bookmarkRepository']],
+        Console::class => [
+            'class' => Console::class,
+            'arguments' => [ '@relation', '@template', '@bookmarkRepository', '@history'],
+        ],
         'table_mover' => ['class' => TableMover::class, 'arguments' => ['@dbi', '@relation']],
+        'history' => [
+            'class' => History::class,
+            'arguments' => ['$dbi' => '@dbi', '$relation' => '@relation', '$config' => '@config'],
+        ],
     ],
 ];

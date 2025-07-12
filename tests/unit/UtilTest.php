@@ -1002,15 +1002,6 @@ class UtilTest extends AbstractTestCase
         return [['test', 'test'], ["\r\ntest", "\n\r\ntest"], ["\ntest", "\ntest"], ["\n\r\ntest", "\n\r\ntest"]];
     }
 
-    public function testUnsupportedDatatypes(): void
-    {
-        $noSupportTypes = [];
-        self::assertSame(
-            $noSupportTypes,
-            Util::unsupportedDatatypes(),
-        );
-    }
-
     public function testGetPageFromPosition(): void
     {
         self::assertSame(Util::getPageFromPosition(0, 1), 1);
@@ -1550,5 +1541,18 @@ SQL;
             [],
             'def',
         ];
+    }
+
+    public function testUnquoteDefaultValue(): void
+    {
+        self::assertSame('foo', Util::unquoteDefaultValue('foo'));
+        self::assertSame('"foo"', Util::unquoteDefaultValue('"foo"'));
+        self::assertSame('`foo`', Util::unquoteDefaultValue('`foo`'));
+        self::assertSame('foo', Util::unquoteDefaultValue('\'foo\''));
+        self::assertSame('', Util::unquoteDefaultValue('\'\''));
+        self::assertSame('\'', Util::unquoteDefaultValue('\'\'\'\''));
+        self::assertSame('q\'q', Util::unquoteDefaultValue('\'q\'q\''));
+        self::assertSame('s\\s', Util::unquoteDefaultValue('\'s\\\\s\''));
+        self::assertSame('sq\'sq', Util::unquoteDefaultValue('\'sq\\\'sq\''));
     }
 }

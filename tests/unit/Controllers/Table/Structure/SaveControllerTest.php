@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Controllers\Table\Structure;
 
+use PhpMyAdmin\Config;
 use PhpMyAdmin\ConfigStorage\Relation;
 use PhpMyAdmin\Controllers\Table\Structure\SaveController;
 use PhpMyAdmin\Controllers\Table\StructureController;
@@ -93,13 +94,15 @@ class SaveControllerTest extends AbstractTestCase
         $mock->expects(self::once())->method('__invoke')->with($request)
             ->willReturn(ResponseFactory::create()->createResponse());
 
+        $relation = new Relation($dbi);
         (new SaveController(
             new ResponseRenderer(),
-            new Relation($dbi),
-            new Transformations(),
+            $relation,
+            new Transformations($dbi, $relation),
             $dbi,
             $mock,
             new UserPrivilegesFactory($dbi),
+            new Config(),
         ))($request);
 
         self::assertArrayNotHasKey('selected', $_POST);
@@ -115,13 +118,15 @@ class SaveControllerTest extends AbstractTestCase
         $class = new ReflectionClass(SaveController::class);
         $method = $class->getMethod('adjustColumnPrivileges');
 
+        $relation = new Relation($dbi);
         $ctrl = new SaveController(
             new ResponseRenderer(),
-            new Relation($dbi),
-            new Transformations(),
+            $relation,
+            new Transformations($dbi, $relation),
             $dbi,
             self::createStub(StructureController::class),
             new UserPrivilegesFactory($dbi),
+            new Config(),
         );
 
         self::assertFalse(

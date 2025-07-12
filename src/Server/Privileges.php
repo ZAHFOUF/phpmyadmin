@@ -237,7 +237,7 @@ class Privileges
                 ($grantValue === 'Y')
                 || ($row === null
                 && is_array($grantValue)
-                && count($grantValue) == $_REQUEST['column_count']
+                && count($grantValue) === (int) $_REQUEST['column_count']
                 && empty($_POST[$currentGrant[0] . '_none']))
             ) {
                 if ($enableHTML) {
@@ -275,7 +275,7 @@ class Privileges
             } else {
                 $privs[] = 'USAGE';
             }
-        } elseif ($allPrivileges && (! isset($_POST['grant_count']) || count($privs) == $_POST['grant_count'])) {
+        } elseif ($allPrivileges && (! isset($_POST['grant_count']) || count($privs) === (int) $_POST['grant_count'])) {
             if ($enableHTML) {
                 $privs = ['<dfn title="' . __('Includes all privileges except GRANT.') . '">ALL PRIVILEGES</dfn>'];
             } else {
@@ -3082,16 +3082,13 @@ class Privileges
      */
     public function getRoutineType(string $dbname, string $routineName): string
     {
-        $routineData = Routines::getDetails($this->dbi, $dbname);
-        $routineName = mb_strtolower($routineName);
+        $routineData = Routines::getDetails($this->dbi, $dbname, name: $routineName);
 
-        foreach ($routineData as $routine) {
-            if (mb_strtolower($routine->name) === $routineName) {
-                return $routine->type;
-            }
+        if ($routineData === []) {
+            return '';
         }
 
-        return '';
+        return $routineData[0]->type;
     }
 
     /**
@@ -3268,7 +3265,7 @@ class Privileges
         return is_string($dbname) && preg_match('/(?<!\\\\)(?:_|%)/', $dbname) === 1;
     }
 
-    public function getRoutinename(ServerRequest $request): string|null
+    public function getRoutinename(ServerRequest $request): string
     {
         $postPredRoutinename = $request->getParsedBodyParamAsString('pred_routinename', '');
         /** @var mixed $requestRoutinename */
@@ -3281,7 +3278,7 @@ class Privileges
             return $requestRoutinename;
         }
 
-        return null;
+        return '';
     }
 
     public function getTablename(ServerRequest $request): string|null

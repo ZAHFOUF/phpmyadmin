@@ -24,9 +24,7 @@ use PhpMyAdmin\Version;
 use function __;
 use function array_fill_keys;
 use function array_keys;
-use function array_reverse;
 use function array_search;
-use function array_shift;
 use function asort;
 use function bin2hex;
 use function count;
@@ -39,7 +37,6 @@ use function is_string;
 use function ksort;
 use function mb_check_encoding;
 use function mb_strlen;
-use function mb_strtoupper;
 use function mb_substr;
 use function natcasesort;
 use function preg_match;
@@ -163,43 +160,43 @@ class Relation
         }
 
         foreach ($tables as $table) {
-            if ($table == $this->config->selectedServer['bookmarktable']) {
+            if ($table === $this->config->selectedServer['bookmarktable']) {
                 $relationParams['bookmark'] = $table;
-            } elseif ($table == $this->config->selectedServer['relation']) {
+            } elseif ($table === $this->config->selectedServer['relation']) {
                 $relationParams['relation'] = $table;
-            } elseif ($table == $this->config->selectedServer['table_info']) {
+            } elseif ($table === $this->config->selectedServer['table_info']) {
                 $relationParams['table_info'] = $table;
-            } elseif ($table == $this->config->selectedServer['table_coords']) {
+            } elseif ($table === $this->config->selectedServer['table_coords']) {
                 $relationParams['table_coords'] = $table;
-            } elseif ($table == $this->config->selectedServer['column_info']) {
+            } elseif ($table === $this->config->selectedServer['column_info']) {
                 $relationParams['column_info'] = $table;
-            } elseif ($table == $this->config->selectedServer['pdf_pages']) {
+            } elseif ($table === $this->config->selectedServer['pdf_pages']) {
                 $relationParams['pdf_pages'] = $table;
-            } elseif ($table == $this->config->selectedServer['history']) {
+            } elseif ($table === $this->config->selectedServer['history']) {
                 $relationParams['history'] = $table;
-            } elseif ($table == $this->config->selectedServer['recent']) {
+            } elseif ($table === $this->config->selectedServer['recent']) {
                 $relationParams['recent'] = $table;
-            } elseif ($table == $this->config->selectedServer['favorite']) {
+            } elseif ($table === $this->config->selectedServer['favorite']) {
                 $relationParams['favorite'] = $table;
-            } elseif ($table == $this->config->selectedServer['table_uiprefs']) {
+            } elseif ($table === $this->config->selectedServer['table_uiprefs']) {
                 $relationParams['table_uiprefs'] = $table;
-            } elseif ($table == $this->config->selectedServer['tracking']) {
+            } elseif ($table === $this->config->selectedServer['tracking']) {
                 $relationParams['tracking'] = $table;
-            } elseif ($table == $this->config->selectedServer['userconfig']) {
+            } elseif ($table === $this->config->selectedServer['userconfig']) {
                 $relationParams['userconfig'] = $table;
-            } elseif ($table == $this->config->selectedServer['users']) {
+            } elseif ($table === $this->config->selectedServer['users']) {
                 $relationParams['users'] = $table;
-            } elseif ($table == $this->config->selectedServer['usergroups']) {
+            } elseif ($table === $this->config->selectedServer['usergroups']) {
                 $relationParams['usergroups'] = $table;
-            } elseif ($table == $this->config->selectedServer['navigationhiding']) {
+            } elseif ($table === $this->config->selectedServer['navigationhiding']) {
                 $relationParams['navigationhiding'] = $table;
-            } elseif ($table == $this->config->selectedServer['savedsearches']) {
+            } elseif ($table === $this->config->selectedServer['savedsearches']) {
                 $relationParams['savedsearches'] = $table;
-            } elseif ($table == $this->config->selectedServer['central_columns']) {
+            } elseif ($table === $this->config->selectedServer['central_columns']) {
                 $relationParams['central_columns'] = $table;
-            } elseif ($table == $this->config->selectedServer['designer_settings']) {
+            } elseif ($table === $this->config->selectedServer['designer_settings']) {
                 $relationParams['designer_settings'] = $table;
-            } elseif ($table == $this->config->selectedServer['export_templates']) {
+            } elseif ($table === $this->config->selectedServer['export_templates']) {
                 $relationParams['export_templates'] = $table;
             }
         }
@@ -424,7 +421,7 @@ class Relation
                 foreach ($internalRelations[$table] as $field => $relations) {
                     if (
                         ($column !== '' && $column !== $field)
-                        || (isset($foreign[$field]) && $foreign[$field] != '')
+                        || (isset($foreign[$field]) && $foreign[$field] !== '')
                     ) {
                         continue;
                     }
@@ -608,137 +605,6 @@ class Relation
     }
 
     /**
-     * Set a SQL history entry
-     *
-     * @param string $db       the name of the db
-     * @param string $table    the name of the table
-     * @param string $username the username
-     * @param string $sqlquery the sql query
-     */
-    public function setHistory(string $db, string $table, string $username, string $sqlquery): void
-    {
-        $maxCharactersInDisplayedSQL = $this->config->settings['MaxCharactersInDisplayedSQL'];
-        // Prevent to run this automatically on Footer class destroying in testsuite
-        if (mb_strlen($sqlquery) > $maxCharactersInDisplayedSQL) {
-            return;
-        }
-
-        $sqlHistoryFeature = $this->getRelationParameters()->sqlHistoryFeature;
-
-        if (! isset($_SESSION['sql_history'])) {
-            $_SESSION['sql_history'] = [];
-        }
-
-        $_SESSION['sql_history'][] = ['db' => $db, 'table' => $table, 'sqlquery' => $sqlquery];
-
-        if (count($_SESSION['sql_history']) > $this->config->settings['QueryHistoryMax']) {
-            // history should not exceed a maximum count
-            array_shift($_SESSION['sql_history']);
-        }
-
-        if ($sqlHistoryFeature === null || ! $this->config->settings['QueryHistoryDB']) {
-            return;
-        }
-
-        $this->dbi->queryAsControlUser(
-            'INSERT INTO '
-            . Util::backquote($sqlHistoryFeature->database) . '.'
-            . Util::backquote($sqlHistoryFeature->history) . '
-                  (`username`,
-                    `db`,
-                    `table`,
-                    `timevalue`,
-                    `sqlquery`)
-            VALUES
-                  (' . $this->dbi->quoteString($username, ConnectionType::ControlUser) . ',
-                   ' . $this->dbi->quoteString($db, ConnectionType::ControlUser) . ',
-                   ' . $this->dbi->quoteString($table, ConnectionType::ControlUser) . ',
-                   NOW(),
-                   ' . $this->dbi->quoteString($sqlquery, ConnectionType::ControlUser) . ')',
-        );
-
-        $this->purgeHistory($username);
-    }
-
-    /**
-     * Gets a SQL history entry
-     *
-     * @param string $username the username
-     *
-     * @return mixed[]|false list of history items
-     */
-    public function getHistory(string $username): array|false
-    {
-        $sqlHistoryFeature = $this->getRelationParameters()->sqlHistoryFeature;
-        if ($sqlHistoryFeature === null) {
-            return false;
-        }
-
-        /**
-         * if db-based history is disabled but there exists a session-based
-         * history, use it
-         */
-        if (! $this->config->settings['QueryHistoryDB']) {
-            if (isset($_SESSION['sql_history'])) {
-                return array_reverse($_SESSION['sql_history']);
-            }
-
-            return false;
-        }
-
-        $histQuery = '
-             SELECT `db`,
-                    `table`,
-                    `sqlquery`,
-                    `timevalue`
-               FROM ' . Util::backquote($sqlHistoryFeature->database)
-                . '.' . Util::backquote($sqlHistoryFeature->history) . '
-              WHERE `username` = ' . $this->dbi->quoteString($username) . '
-           ORDER BY `id` DESC';
-
-        return $this->dbi->fetchResultSimple($histQuery, ConnectionType::ControlUser);
-    }
-
-    /**
-     * purges SQL history
-     *
-     * deletes entries that exceeds $cfg['QueryHistoryMax'], oldest first, for the
-     * given user
-     *
-     * @param string $username the username
-     */
-    public function purgeHistory(string $username): void
-    {
-        $sqlHistoryFeature = $this->getRelationParameters()->sqlHistoryFeature;
-        if (! $this->config->settings['QueryHistoryDB'] || $sqlHistoryFeature === null) {
-            return;
-        }
-
-        $searchQuery = '
-            SELECT `timevalue`
-            FROM ' . Util::backquote($sqlHistoryFeature->database)
-                . '.' . Util::backquote($sqlHistoryFeature->history) . '
-            WHERE `username` = ' . $this->dbi->quoteString($username) . '
-            ORDER BY `timevalue` DESC
-            LIMIT ' . $this->config->settings['QueryHistoryMax'] . ', 1';
-
-        $maxTime = $this->dbi->fetchValue($searchQuery, 0, ConnectionType::ControlUser);
-
-        if (! $maxTime) {
-            return;
-        }
-
-        $this->dbi->queryAsControlUser(
-            'DELETE FROM '
-            . Util::backquote($sqlHistoryFeature->database) . '.'
-            . Util::backquote($sqlHistoryFeature->history) . '
-              WHERE `username` = ' . $this->dbi->quoteString($username, ConnectionType::ControlUser)
-            . '
-                AND `timevalue` <= \'' . $maxTime . '\'',
-        );
-    }
-
-    /**
      * Prepares the dropdown for one mode
      *
      * @param mixed[] $foreign the keys and values for foreigns
@@ -884,7 +750,7 @@ class Relation
         // beginning of dropdown
         $ret = '<option value="">&nbsp;</option>';
         $topCount = count($top);
-        if ($max == -1 || $topCount < $max) {
+        if ($max === -1 || $topCount < $max) {
             $ret .= implode('', $top);
             if ($foreignDisplay && $topCount > 0) {
                 // this empty option is to visually mark the beginning of the
@@ -930,7 +796,7 @@ class Relation
             }
 
             $foreigner = $this->searchColumnInForeigners($foreigners, $field);
-            if ($foreigner == false) {
+            if ($foreigner === false || $foreigner === []) {
                 break;
             }
 
@@ -1615,22 +1481,20 @@ class Relation
     /**
      * Get tables for foreign key constraint
      *
-     * @param string $foreignDb        Database name
-     * @param string $tblStorageEngine Table storage engine
+     * @param string $foreignDb     Database name
+     * @param string $storageEngine Table storage engine
      *
-     * @return mixed[] Table names
+     * @return string[] Table names
      */
-    public function getTables(string $foreignDb, string $tblStorageEngine): array
+    public function getTables(string $foreignDb, string $storageEngine): array
     {
-        $tables = [];
-        $tablesRows = $this->dbi->query('SHOW TABLE STATUS FROM ' . Util::backquote($foreignDb));
-        while ($row = $tablesRows->fetchRow()) {
-            if (! isset($row[1]) || mb_strtoupper($row[1]) !== $tblStorageEngine) {
-                continue;
-            }
-
-            $tables[] = $row[0];
-        }
+        $tablesRows = $this->dbi->query(
+            'SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '
+            . $this->dbi->quoteString($foreignDb)
+            . ' AND ENGINE = ' . $this->dbi->quoteString($storageEngine),
+        );
+        /** @var list<string> $tables */
+        $tables = $tablesRows->fetchAllColumn();
 
         if ($this->config->settings['NaturalOrder']) {
             usort($tables, strnatcasecmp(...));

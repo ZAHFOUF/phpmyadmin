@@ -10,8 +10,8 @@ use PhpMyAdmin\Tests\AbstractTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Component\Console\Command\Command;
 use Twig\Error\SyntaxError;
-use Twig\Source;
 
+use function array_multisort;
 use function class_exists;
 use function sort;
 
@@ -71,55 +71,38 @@ class TwigLintCommandTest extends AbstractTestCase
         sort($filesInfos, SORT_REGULAR);
 
         self::assertSame([
-            ['template' => '', 'file' => $path . DIRECTORY_SEPARATOR . 'one.txt', 'valid' => true],
-            ['template' => '', 'file' => $path . DIRECTORY_SEPARATOR . 'two.md', 'valid' => true],
+            ['template' => '', 'file' => $path . DIRECTORY_SEPARATOR . 'one.txt'],
+            ['template' => '', 'file' => $path . DIRECTORY_SEPARATOR . 'two.md'],
             [
                 'template' => '0000' . "\n",
                 'file' => $path . DIRECTORY_SEPARATOR . 'subfolder' . DIRECTORY_SEPARATOR . 'zero.txt',
-                'valid' => true,
             ],
             [
                 'template' => 'key=value' . "\n",
                 'file' => $path . DIRECTORY_SEPARATOR . 'subfolder' . DIRECTORY_SEPARATOR . 'one.ini',
-                'valid' => true,
             ],
         ], $filesInfos);
     }
 
     public function testGetFilesInfoInvalidFile(): void
     {
-        $command = $this->getMockBuilder(TwigLintCommand::class)
-            ->onlyMethods(['getTemplateContents', 'findFiles'])
-            ->getMock();
+        $twigLintCommand = new TwigLintCommand();
+        $path = __DIR__ . '/../_data/templates/lint_command';
+        $filesFound = $twigLintCommand->getFilesInfo($path);
 
-        $command->expects(self::exactly(1))
-            ->method('findFiles')
-            ->willReturn(
-                ['foo.twig', 'foo-invalid.twig'],
-            );
-
-        $command->expects(self::exactly(2))->method('getTemplateContents')->willReturnMap([
-            ['foo.twig', '{{ file }}'],
-            ['foo-invalid.twig', '{{ file }'],
-        ]);
-
-        $filesFound = $this->callFunction($command, TwigLintCommand::class, 'getFilesInfo', [
-            __DIR__ . '/../_data/file_listing',
-        ]);
-
-        self::assertEquals([
-            ['template' => '{{ file }}', 'file' => 'foo.twig', 'valid' => true],
-            [
-                'template' => '{{ file }',
-                'file' => 'foo-invalid.twig',
-                'valid' => false,
-                'line' => 1,
-                'exception' => new SyntaxError('Unexpected "}".', 1, new Source(
-                    '{{ file }',
-                    'foo-invalid.twig',
-                )),
-            ],
-        ], $filesFound);
+        self::assertCount(2, $filesFound);
+        array_multisort($filesFound);
+        self::assertSame('{{ file }}' . "\n", $filesFound[0]['template']);
+        self::assertSame($path . DIRECTORY_SEPARATOR . 'foo-valid.twig', $filesFound[0]['file']);
+        self::assertSame('{{ file }' . "\n", $filesFound[1]['template']);
+        self::assertSame($path . DIRECTORY_SEPARATOR . 'foo-invalid.twig', $filesFound[1]['file']);
+        self::assertArrayHasKey('exception', $filesFound[1]);
+        $exception = $filesFound[1]['exception'];
+        self::assertInstanceOf(SyntaxError::class, $exception);
+        self::assertSame(
+            'Unexpected "}" in "' . $path . DIRECTORY_SEPARATOR . 'foo-invalid.twig" at line 1.',
+            $exception->getMessage(),
+        );
     }
 
     public function testGetContext(): void

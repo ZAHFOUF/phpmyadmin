@@ -13,7 +13,7 @@ use PhpMyAdmin\Current;
 use PhpMyAdmin\Dbal\DatabaseInterface;
 use PhpMyAdmin\DbTableExists;
 use PhpMyAdmin\Http\Factory\ServerRequestFactory;
-use PhpMyAdmin\Index;
+use PhpMyAdmin\Indexes\Index;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Tests\AbstractTestCase;
 use PhpMyAdmin\Tests\Stubs\DbiDummy;
@@ -99,10 +99,11 @@ class StructureControllerTest extends AbstractTestCase
             $response,
             $template,
             $relation,
-            new Transformations(),
+            new Transformations($this->dbi, $relation),
             $this->dbi,
             $pageSettings,
             new DbTableExists($this->dbi),
+            $config,
         ))($request);
 
         $expected = $pageSettings->getHTML();

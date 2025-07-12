@@ -167,13 +167,7 @@ class Config
             return false;
         }
 
-        if (function_exists('gd_info')) {
-            if (str_contains(gd_info()['GD Version'], '2.')) {
-                return true;
-            }
-        }
-
-        return false;
+        return function_exists('gd_info') && str_contains(gd_info()['GD Version'], '2.');
     }
 
     public function isWindows(): bool
@@ -291,7 +285,7 @@ class Config
                 (! isset($configData['ThemeDefault'])
                 && $themeManager->theme->getId() !== 'original')
                 || isset($configData['ThemeDefault'])
-                && $configData['ThemeDefault'] != $themeManager->theme->getId()
+                && $configData['ThemeDefault'] !== $themeManager->theme->getId()
             ) {
                 $this->setUserValue(
                     null,
@@ -301,7 +295,7 @@ class Config
                 );
             }
         } elseif (
-            $this->settings['ThemeDefault'] != $themeManager->theme->getId()
+            $this->settings['ThemeDefault'] !== $themeManager->theme->getId()
             && $themeManager->themeExists($this->settings['ThemeDefault'])
         ) {
             // no cookie - read default from settings
@@ -542,7 +536,7 @@ class Config
         } elseif (Util::getProtoFromForwardedHeader(Core::getEnv('HTTP_FORWARDED')) === 'https') {
             // RFC 7239 Forwarded header
             $isHttps = true;
-        } elseif (Core::getEnv('SERVER_PORT') == 443) {
+        } elseif ((int) Core::getEnv('SERVER_PORT') === 443) {
             $isHttps = true;
         }
 
@@ -575,11 +569,6 @@ class Config
 
         /* Remove filename */
         if (str_ends_with($parts[count($parts) - 1], '.php')) {
-            $parts = array_slice($parts, 0, count($parts) - 1);
-        }
-
-        /* Remove extra path from javascript calls */
-        if (defined('PMA_PATH_TO_BASEDIR')) {
             $parts = array_slice($parts, 0, count($parts) - 1);
         }
 
